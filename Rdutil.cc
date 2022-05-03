@@ -17,6 +17,7 @@
 #include <ostream>  //for output
 #include <string>   //for easier passing of string arguments
 #include <thread>   //sleep
+#include <future>
 
 // project
 #include "Fileinfo.hh" //file container
@@ -24,6 +25,36 @@
 
 // class declaration
 #include "Rdutil.hh"
+
+#include <opencv2/opencv.hpp>
+#include <opencv2/img_hash.hpp>
+
+template <class T, class Creator>
+std::vector<std::thread> runInParallel(std::vector<T>& v, Creator creator) {
+    const auto coreCount = std::thread::hardware_concurrency();
+    const auto bucketSize = std::max((size_t)1, v.size() / (coreCount - 1));
+    
+    auto threads = std::vector<std::thread>();
+    //int offset = 0;
+    //std::cout << "There're " << m_list.size() << " items" << std::endl;
+    for (int i = 0; i < v.size(); i += bucketSize) {
+        size_t resultBucketSize = 0;
+        if (i + bucketSize <= v.size()) {
+            resultBucketSize = bucketSize;
+        } else {
+            resultBucketSize = v.size() - i;
+        }
+
+        threads.push_back(std::thread(
+          creator(
+               v.begin() + i,
+               v.begin() + i + resultBucketSize
+               )
+          ));
+    }
+
+    return threads;
+}
 
 int
 Rdutil::printtofile(const std::string& filename) const
@@ -42,6 +73,13 @@ Rdutil::printtofile(const std::string& filename) const
   // This uses "priority" instead of "cmdlineindex". Change this the day
   // a change in output format is allowed (for backwards compatibility).
   output << "# Automatically generated\n";
+    if (!phashDistance.empty()) {
+      output << "# Probably similar images\n";
+      for (auto& p : phashDistance) {
+        output << "phash distance " << p.distance << " is more than 2 for " << p.f1.name() << " and " << p.f2.name() << '\n';
+      }
+  }
+  
   output << "# duptype id depth size device inode priority name\n";
 
   std::vector<Fileinfo>::iterator it;
@@ -229,11 +267,40 @@ cmpSize(const Fileinfo& a, const Fileinfo& b)
 {
   return a.size() < b.size();
 }
+
+// compares file size
+bool
+cmpSizeReversed(const Fileinfo& a, const Fileinfo& b)
+{
+  return b.size() < a.size();
+}
 bool
 cmpSizeThenBuffer(const Fileinfo& a, const Fileinfo& b)
 {
   return (a.size() < b.size()) || (a.size() == b.size() && cmpBuffers(a, b));
 }
+
+//int
+//cmpNameInt(const Fileinfo& a, const Fileinfo& b)
+//{
+//  auto aNamePos = a.name().rfind('/');
+//  auto bNamePos = b.name().rfind('/');
+//  //std::cout << a.name().substr(aNamePos) << " " << b.name().substr(bNamePos) << std::endl;
+//  return a.name().substr(aNamePos).compare(b.name().substr(bNamePos));
+//}
+//
+//bool
+//cmpName(const Fileinfo& a, const Fileinfo& b)
+//{
+//  return cmpNameInt(a, b) < 0;
+//}
+//
+//bool
+//cmpNameThenBuffer(const Fileinfo& a, const Fileinfo& b)
+//{
+//  int r = cmpNameInt(a, b);
+//  return r < 0 || (r == 0 && cmpBuffers(a, b));
+//}
 
 /**
  * goes through first to last, finds ranges of equal elements (determined by
@@ -299,6 +366,12 @@ Rdutil::sort_on_depth_and_name(std::size_t index_of_first)
   std::sort(it, std::end(m_list), cmpDepthName);
 }
 
+void
+Rdutil::sort_by_size_reversed()
+{
+  std::sort(std::begin(m_list), std::end(m_list), cmpSizeReversed);
+}
+
 std::size_t
 Rdutil::removeIdenticalInodes()
 {
@@ -343,6 +416,45 @@ Rdutil::removeUniqueSizes()
 }
 
 std::size_t
+Rdutil::removeNonImages() {
+    std::for_each(
+        m_list.begin(), m_list.end(), [](Fileinfo& f) {
+            f.setdeleteflag(!f.isImage());
+        }
+    );
+    
+    return cleanup();
+}
+
+
+//std::size_t
+//Rdutil::removeUniqueNames()
+//{
+//  // sort list on size
+//  auto cmp = cmpName;
+//  std::sort(m_list.begin(), m_list.end(), cmp);
+//
+//  // loop over ranges of adjacent elements
+//  using Iterator = decltype(m_list.begin());
+//
+////std::for_each(m_list.begin(), m_list.end(), [](Fileinfo& f) { std::cout << f.name() << " "; });
+//
+//  apply_on_range(
+//    m_list.begin(), m_list.end(), cmp, [](Iterator first, Iterator last) {
+//      if (first + 1 == last) {
+//        // single element. remove it!
+//        first->setdeleteflag(true);
+//      } else {
+//        // multiple elements. keep them!
+//        std::for_each(first, last, [](Fileinfo& f) { f.setdeleteflag(false); });
+//      }
+//    });
+//
+//  //std::cout << "end of removeUniqueNames" << std::endl;
+//  return cleanup();
+//}
+
+std::size_t
 Rdutil::removeUniqSizeAndBuffer()
 {
   // sort list on size
@@ -374,10 +486,216 @@ Rdutil::removeUniqSizeAndBuffer()
   return cleanup();
 }
 
+std::size_t
+Rdutil::removeImagesWithUniqueBuffer()
+{
+  std::for_each(
+      m_list.begin(), m_list.end(), [](Fileinfo& f) { 
+        f.setdeleteflag(!f.isImage()); 
+      }
+  );
+  cleanup();
+
+  // sort list on name
+  const auto cmp = cmpBuffers;
+  std::sort(m_list.begin(), m_list.end(), cmp);
+
+//  const auto bufcmp = cmpBuffers;
+
+  // loop over ranges of adjacent elements
+  using Iterator = decltype(m_list.begin());
+  apply_on_range(
+    m_list.begin(), m_list.end(), cmp, [&](Iterator first, Iterator last) {
+        if (first + 1 == last) {
+          // we have a unique buffer!
+            first->setdeleteflag(true);
+        } else {
+          std::for_each(
+            first, last, [](Fileinfo& f) { f.setdeleteflag(false); });
+        }
+        
+//      // all names are equal in [first,last) - sort on buffer content.
+//      std::sort(first, last, bufcmp);
+//
+//      // on this set of buffers, find those which are unique
+//      apply_on_range(
+//        first, last, bufcmp, [](Iterator firstbuf, Iterator lastbuf) {
+//          if (firstbuf + 1 == lastbuf) {
+//            // we have a unique buffer!
+//            firstbuf->setdeleteflag(true);
+//          } else {
+//            std::for_each(
+//              firstbuf, lastbuf, [](Fileinfo& f) { f.setdeleteflag(false); });
+//          }
+//        });
+    });
+
+// use only phash
+  // const auto bufcmp = cmpBuffers;
+  // std::sort(m_list.begin(), m_list.end(), bufcmp);
+
+  // // loop over ranges of adjacent elements
+  // using Iterator = decltype(m_list.begin());
+  // apply_on_range(
+  //   m_list.begin(), m_list.end(), bufcmp, [&](Iterator first, Iterator last) {
+  //     // on this set of buffers, find those which are unique
+  //     if (first + 1 == last) {
+  //       // we have a unique buffer!
+  //       first->setdeleteflag(true);
+  //     } else {
+  //       std::for_each(
+  //         first, last, [](Fileinfo& f) { f.setdeleteflag(false); });
+  //     }
+  //   });
+
+  return cleanup();
+}
+
+class CalcPhashThread
+{
+    std::vector<Fileinfo>::iterator begin;
+    std::vector<Fileinfo>::iterator end;
+    std::promise<std::vector<std::pair<Fileinfo, cv::Mat>>> promise;
+    
+public:
+    
+    CalcPhashThread(
+         std::vector<Fileinfo>::iterator b,
+         std::vector<Fileinfo>::iterator e,
+         std::promise<std::vector<std::pair<Fileinfo, cv::Mat>>>&& p
+     ) {
+        begin = b;
+        end = e;
+        promise = std::move(p);
+    }
+    
+    void operator()()
+    {
+        auto result = std::vector<std::pair<Fileinfo, cv::Mat>>();
+        std::for_each(begin, end, [&](Fileinfo& f) {
+            result.push_back(std::pair<Fileinfo, cv::Mat>(f, f.calcPhash()));
+        });
+        
+        promise.set_value(result);
+    }
+};
+
+std::int64_t minInt64(std::int64_t l, std::int64_t r) {
+    if (l < r) {
+        return l;
+    } else {
+        return r;
+    }
+}
+
+std::int64_t maxInt64(std::int64_t l, std::int64_t r) {
+    if (l > r) {
+        return l;
+    } else {
+        return r;
+    }
+}
+
+void
+Rdutil::verifyByPhash()
+{
+  const auto cmp = cmpBuffers;//cmpSizeThenBuffer;
+  assert(std::is_sorted(m_list.begin(), m_list.end(), cmp));
+
+  // loop over ranges of adjacent elements
+  using Iterator = decltype(m_list.begin());
+  apply_on_range(
+    m_list.begin(),
+    m_list.end(),
+    cmp,
+    [this](const Iterator first, const Iterator last) {
+      // size and buffer are equal in  [first,last) - all are duplicates!
+      auto d = std::distance(first, last);
+      assert(d >= 2);
+        
+        // calculate phashes and check distance
+//        auto phashes = std::vector<std::pair<Fileinfo,cv::Mat>>();
+//          auto calculator = [&](Fileinfo& elem) {
+//              phashes.push_back(std::pair<Fileinfo,cv::Mat>(elem, elem.calcPhash()));
+//          };
+//        std::for_each(first, last, calculator);
+
+        auto subVector = std::vector<Fileinfo>(first, last);
+        auto threadFutures = std::vector<std::future<std::vector<std::pair<Fileinfo, cv::Mat>>>>();
+        
+        auto threads = runInParallel(
+            subVector,
+            [&, this](std::vector<Fileinfo>::iterator begin, std::vector<Fileinfo>::iterator end) {
+                auto promise = std::promise<std::vector<std::pair<Fileinfo, cv::Mat>>>();
+                threadFutures.push_back(promise.get_future());
+
+                return CalcPhashThread(
+                   begin,
+                   end,
+                   std::move(promise)
+                );
+            }
+        );
+        
+        std::for_each(threads.begin(), threads.end(), std::mem_fn(&std::thread::join));
+        
+        
+        auto phashes = std::vector<std::pair<Fileinfo,cv::Mat>>();
+        std::for_each(threadFutures.begin(), threadFutures.end(), [&](std::future<std::vector<std::pair<Fileinfo, cv::Mat>>>& f) {
+            auto v = f.get();
+            phashes.insert(phashes.end(), v.begin(), v.end());
+        });
+        
+        auto phashPtr = cv::img_hash::PHash::create();
+        auto results = std::vector<std::pair<Fileinfo, Fileinfo>>();
+        auto identitySet = std::set<std::int64_t>();
+        auto pairs = std::set<std::pair<std::int64_t, std::int64_t>>();
+        auto checker = [&, this](std::pair<Fileinfo,cv::Mat>& elem) mutable {
+            std::for_each(
+              phashes.begin(),
+              phashes.end(),
+              [&, this](std::pair<Fileinfo,cv::Mat>& e) mutable {
+                  if (elem.first.getidentity() != e.first.getidentity()) {
+                      auto d = phashPtr->compare(elem.second, e.second);
+                      auto pair = std::pair<std::int64_t, std::int64_t>(
+                            minInt64(elem.first.getidentity(), e.first.getidentity()),
+                            maxInt64(elem.first.getidentity(), e.first.getidentity())
+                       );
+                      if (d > 2 && pairs.find(pair) == pairs.end()) {
+                        identitySet.insert(pair.first);
+                        identitySet.insert(pair.second);
+                          pairs.insert(pair);
+                          phashDistance.push_back(
+                            {
+                              elem.first,
+                              e.first,
+                              d
+                            }
+                          );
+                      }
+                  }
+            }
+           );
+        };
+        std::for_each(phashes.begin(), phashes.end(), checker);
+        
+        std::for_each(m_list.begin(), m_list.end(), [&](Fileinfo& f) {
+          if (identitySet.find(f.getidentity()) != identitySet.end()) {
+            f.setdeleteflag(true);
+          }
+        });
+    });
+    cleanup();
+}
+
+size_t Rdutil::phashDistanceCount() {
+  return phashDistance.size();
+}
+
 void
 Rdutil::markduplicates()
 {
-  const auto cmp = cmpSizeThenBuffer;
+  const auto cmp = cmpBuffers;//cmpSizeThenBuffer;
   assert(std::is_sorted(m_list.begin(), m_list.end(), cmp));
 
   // loop over ranges of adjacent elements
@@ -399,7 +717,7 @@ Rdutil::markduplicates()
 
       // make sure they are all duplicates
       assert(last == find_if_not(first, last, [orig](const Fileinfo& a) {
-               return orig->size() == a.size() && hasEqualBuffers(*orig, a);
+               return /*orig->size() == a.size() &&*/ hasEqualBuffers(*orig, a);
              }));
 
       // mark the files with the appropriate tag.
@@ -538,21 +856,93 @@ Rdutil::saveablespace(std::ostream& out) const
   return out;
 }
 
+
+
+class FillWithBufferThread
+{
+    enum Fileinfo::readtobuffermode type;
+    enum Fileinfo::readtobuffermode lasttype;
+    std::vector<Fileinfo>::iterator begin;
+    std::vector<Fileinfo>::iterator end;
+    
+public:
+    
+    FillWithBufferThread(
+                         enum Fileinfo::readtobuffermode t,
+                         enum Fileinfo::readtobuffermode lt,
+                         std::vector<Fileinfo>::iterator b,
+                         std::vector<Fileinfo>::iterator e
+                         ) {
+        type = t;
+        lasttype = lt;
+        begin = b;
+        end = e;
+    }
+    
+    void operator()()
+    {
+        std::for_each(begin, end, [this](Fileinfo& f) {
+            f.fillwithbytes(type, lasttype);
+        });
+    }
+};
+
+
 int
 Rdutil::fillwithbytes(enum Fileinfo::readtobuffermode type,
                       enum Fileinfo::readtobuffermode lasttype,
                       const long nsecsleep)
 {
   // first sort on inode (to read efficiently from the hard drive)
-  sortOnDeviceAndInode();
+  //sortOnDeviceAndInode();
 
-  const auto duration = std::chrono::nanoseconds{ nsecsleep };
+  //const auto duration = std::chrono::nanoseconds{ nsecsleep };
 
-  for (auto& elem : m_list) {
-    elem.fillwithbytes(type, lasttype);
-    if (nsecsleep > 0) {
-      std::this_thread::sleep_for(duration);
-    }
-  }
+//  const auto coreCount = std::thread::hardware_concurrency();
+//  const auto bucketSize = m_list.size() / (coreCount - 1);
+//
+//    auto threads = std::vector<std::thread>();
+//    //int offset = 0;
+//    //std::cout << "There're " << m_list.size() << " items" << std::endl;
+//    for (int i = 0; i < m_list.size(); i += bucketSize) {
+//        size_t resultBucketSize = 0;
+//        if (i + bucketSize <= m_list.size()) {
+//            resultBucketSize = bucketSize;
+//        } else {
+//            resultBucketSize = m_list.size() - i;
+//        }
+//
+//        threads.push_back(std::thread(
+//          FillWithBufferThread(
+//               type,
+//               lasttype,
+//               m_list.begin() + i,
+//               m_list.begin() + i + resultBucketSize
+//               )
+//          ));
+//    }
+    
+    auto threads = runInParallel(
+        m_list,
+        [type, lasttype](std::vector<Fileinfo>::iterator begin, std::vector<Fileinfo>::iterator end) {
+            return FillWithBufferThread(
+               type,
+               lasttype,
+               begin,
+               end
+            );
+        }
+    );
+    
+    std::for_each(threads.begin(), threads.end(), std::mem_fn(&std::thread::join));
+    
+//  for (auto& elem : m_list) {
+//    elem.fillwithbytes(type, lasttype);
+//    if (nsecsleep > 0) {
+//      std::this_thread::sleep_for(duration);
+//    }
+//  }
   return 0;
 }
+
+

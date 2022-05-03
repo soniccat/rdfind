@@ -13,6 +13,12 @@
 
 #include "Fileinfo.hh" //file container
 
+struct PhashDistance {
+    Fileinfo f1;
+    Fileinfo f2;
+    double distance;
+};
+
 class Rdutil
 {
 public:
@@ -41,6 +47,8 @@ public:
    * this is useful to be independent of the filesystem order.
    */
   void sort_on_depth_and_name(std::size_t index_of_first);
+  
+  void sort_by_size_reversed();
 
   /**
    * for each group of identical inodes, only keep the one with the highest
@@ -55,11 +63,17 @@ public:
    */
   std::size_t removeUniqueSizes();
 
+  std::size_t removeUniqueNames();
+    
+    std::size_t removeNonImages();
+
   /**
    * remove files with unique combination of size and buffer from the list.
    * @return
    */
   std::size_t removeUniqSizeAndBuffer();
+
+  std::size_t removeImagesWithUniqueBuffer();
 
   /**
    * Assumes the list is already sorted on size, and all elements with the same
@@ -99,6 +113,9 @@ public:
 
   /// delete duplicates from file system.
   std::size_t deleteduplicates(bool dryrun) const;
+    
+  void verifyByPhash();
+  size_t phashDistanceCount();
 
   /**
    * gets the total size, in bytes.
@@ -121,7 +138,8 @@ public:
   std::ostream& saveablespace(std::ostream& out) const;
 
 private:
-  std::vector<Fileinfo>& m_list;
+    std::vector<Fileinfo>& m_list;
+    std::vector<PhashDistance> phashDistance;
 };
 
 #endif

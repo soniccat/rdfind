@@ -13,6 +13,9 @@
 // os specific headers
 #include <sys/types.h> //for off_t and others.
 
+#include <opencv2/opencv.hpp>
+#include "Cache.hh"
+
 /**
  Holds information about a file.
  Keeping this small is probably beneficial for performance, because the
@@ -22,7 +25,7 @@ class Fileinfo
 {
 public:
   // constructor
-  Fileinfo(std::string name, int cmdline_index, int depth)
+  Fileinfo(std::string name, int cmdline_index, int depth, Cache* c)
     : m_info()
     , m_filename(std::move(name))
     , m_delete(false)
@@ -30,6 +33,7 @@ public:
     , m_cmdline_index(cmdline_index)
     , m_depth(depth)
     , m_identity(0)
+    , m_cache(c)
   {
     m_somebytes.fill('\0');
   }
@@ -46,6 +50,7 @@ public:
     CREATE_MD5_CHECKSUM = 2,
     CREATE_SHA1_CHECKSUM,
     CREATE_SHA256_CHECKSUM,
+    AVERAGE_HASH,
   };
 
   // type of duplicate
@@ -153,6 +158,10 @@ public:
   // returns true if file is a directory . call readfileinfo first!
   bool isDirectory() const { return m_info.is_directory; }
 
+  bool isImage();
+    
+    cv::Mat calcPhash();
+
 private:
   // to store info about the file
   struct Fileinfostat
@@ -202,6 +211,8 @@ private:
   };
   /// a buffer that will be filled with some bytes of the file or a hash
   std::array<char, SomeByteSize> m_somebytes;
+  
+  Cache* m_cache;
 };
 
 #endif

@@ -25,6 +25,7 @@ public:
     MD5,
     SHA1,
     SHA256,
+    AVERAGE_HASH,
   };
 
   explicit Checksum(checksumtypes type);

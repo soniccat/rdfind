@@ -83,6 +83,11 @@ AC_ARG_ENABLE(warnings,
 dnl the following warning related paragraph is from the gnumeric project, which
 dnl is gpl-v2 licensed. I modified and expanded it a bit.
 
+CXXFLAGS="$CXXFLAGS -std=c++11"
+CXXFLAGS="$CXXFLAGS -ltiff -ljpeg -lpng"
+CXXFLAGS="$CXXFLAGS -I/usr/local/include/opencv4"
+CXXFLAGS="$CXXFLAGS -lopencv_img_hash -lopencv_core -lopencv_imgcodecs"
+
 if test "x$set_more_warnings" != xno; then
         dnl Clang needs this option, or else it will appear to support any
         dnl warning option, only to spew warnings about them later.

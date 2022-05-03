@@ -19,6 +19,10 @@
 #include "RdfindDebug.hh" //debug macro
 #include "Rdutil.hh"      //to do some work
 
+#include <opencv2/opencv.hpp>
+
+#include "Cache.hh"
+
 // global variables
 
 // this vector holds the information about all files found
@@ -88,6 +92,8 @@ usage()
     << "version is " << VERSION << '\n';
 }
 
+Cache cache;
+
 struct Options
 {
   // operation mode and default values
@@ -107,7 +113,8 @@ struct Options
   bool usesha256 = false;    // use sha256 checksum to check for similarity
   bool deterministic = true; // be independent of filesystem order
   long nsecsleep = 0; // number of nanoseconds to sleep between each file read.
-  std::string resultsfile = "results.txt"; // results file name.
+  std::string resultsfile = "rdfind_results.txt"; // results file name.
+  std::string cachefile = ""; // cache file name.
 };
 
 Options
@@ -136,6 +143,8 @@ parseOptions(Parser& parser)
       o.makeresultsfile = parser.get_parsed_bool();
     } else if (parser.try_parse_string("-outputname")) {
       o.resultsfile = parser.get_parsed_string();
+    } else if (parser.try_parse_string("-cachename")) {
+      o.cachefile = parser.get_parsed_string();
     } else if (parser.try_parse_bool("-ignoreempty")) {
       if (parser.get_parsed_bool()) {
         o.minimumfilesize = 1;
@@ -253,7 +262,8 @@ report(const std::string& path, const std::string& name, int depth)
   // expand the name if the path is nonempty
   std::string expandedname = path.empty() ? name : (path + "/" + name);
 
-  Fileinfo tmp(std::move(expandedname), current_cmdline_index, depth);
+//Cache c;
+  Fileinfo tmp(std::move(expandedname), current_cmdline_index, depth, &cache);
   if (tmp.readfileinfo()) {
     if (tmp.isRegularFile()) {
       const auto size = tmp.size();
@@ -269,6 +279,7 @@ report(const std::string& path, const std::string& name, int depth)
   return 0;
 }
 
+
 int
 main(int narg, const char* argv[])
 {
@@ -281,6 +292,10 @@ main(int narg, const char* argv[])
   Parser parser(narg, argv);
 
   const Options o = parseOptions(parser);
+
+  if (!o.cachefile.empty()) {
+    cache.load(o.cachefile);
+  }
 
   // set the dryrun string
   const std::string dryruntext(o.dryrun ? "(DRYRUN MODE) " : "");
@@ -321,10 +336,12 @@ main(int narg, const char* argv[])
 
     // if we want deterministic output, we will sort the newly added
     // items on depth, then filename.
-    if (o.deterministic) {
-      gswd.sort_on_depth_and_name(lastsize);
-    }
+//    if (o.deterministic) {
+//      gswd.sort_on_depth_and_name(lastsize);
+//    }
   }
+  
+  gswd.sort_by_size_reversed(); // to have bigger file at the top
 
   std::cout << dryruntext << "Now have " << filelist.size()
             << " files in total." << std::endl;
@@ -344,29 +361,36 @@ main(int narg, const char* argv[])
             << " bytes or ";
   gswd.totalsize(std::cout) << std::endl;
 
-  std::cout << "Removed " << gswd.removeUniqueSizes()
-            << " files due to unique sizes from list. ";
+  // std::cout << "Removed " << gswd.removeUniqueSizes()
+  //           << " files due to unique sizes from list. ";
+  //std::cout << "Removed " << gswd.removeUniqueNames()
+  //           << " files due to unique names from list. ";
+    std::cout << "Removed " << gswd.removeNonImages()
+               << " non image files from list. ";
   std::cout << filelist.size() << " files left." << std::endl;
 
   // ok. we now need to do something stronger to disambiguate the duplicate
   // candidates. start looking at the contents.
   std::vector<std::pair<Fileinfo::readtobuffermode, const char*>> modes{
     { Fileinfo::readtobuffermode::NOT_DEFINED, "" },
-    { Fileinfo::readtobuffermode::READ_FIRST_BYTES, "first bytes" },
-    { Fileinfo::readtobuffermode::READ_LAST_BYTES, "last bytes" },
+    //{ Fileinfo::readtobuffermode::READ_FIRST_BYTES, "first bytes" },
+    //{ Fileinfo::readtobuffermode::READ_LAST_BYTES, "last bytes" },
   };
-  if (o.usemd5) {
-    modes.emplace_back(Fileinfo::readtobuffermode::CREATE_MD5_CHECKSUM,
-                       "md5 checksum");
-  }
-  if (o.usesha1) {
-    modes.emplace_back(Fileinfo::readtobuffermode::CREATE_SHA1_CHECKSUM,
-                       "sha1 checksum");
-  }
-  if (o.usesha256) {
-    modes.emplace_back(Fileinfo::readtobuffermode::CREATE_SHA256_CHECKSUM,
-                       "sha256 checksum");
-  }
+  // if (o.usemd5) {
+  //   modes.emplace_back(Fileinfo::readtobuffermode::CREATE_MD5_CHECKSUM,
+  //                      "md5 checksum");
+  // }
+  // if (o.usesha1) {
+  //   modes.emplace_back(Fileinfo::readtobuffermode::CREATE_SHA1_CHECKSUM,
+  //                      "sha1 checksum");
+  // }
+  // if (o.usesha256) {
+  //   modes.emplace_back(Fileinfo::readtobuffermode::CREATE_SHA256_CHECKSUM,
+  //                      "sha256 checksum");
+  // }
+
+  modes.emplace_back(Fileinfo::readtobuffermode::AVERAGE_HASH,
+                       "AVERAGE_HASH");
 
   for (auto it = modes.begin() + 1; it != modes.end(); ++it) {
     std::cout << dryruntext << "Now eliminating candidates based on "
@@ -374,11 +398,20 @@ main(int narg, const char* argv[])
 
     // read bytes (destroys the sorting, for disk reading efficiency)
     gswd.fillwithbytes(it[0].first, it[-1].first, o.nsecsleep);
+    
+    std::cout << "removed " << gswd.cleanup()
+              << " wrong image files " << std::endl;;
 
     // remove non-duplicates
-    std::cout << "removed " << gswd.removeUniqSizeAndBuffer()
-              << " files from list. ";
+    // std::cout << "removed " << gswd.removeUniqSizeAndBuffer()
+    //           << " files from list. ";
+    std::cout << "removed " << gswd.removeImagesWithUniqueBuffer()
+              << " files with unique buffer from list. ";
     std::cout << filelist.size() << " files left." << std::endl;
+      
+      std::cout << "Verifying images by Phash... ";
+      gswd.verifyByPhash();
+      std::cout << gswd.phashDistanceCount() << " looks different" << std::endl;
   }
 
   // What is left now is a list of duplicates, ordered on size.
@@ -398,6 +431,10 @@ main(int narg, const char* argv[])
     std::cout << dryruntext << "Now making results file " << o.resultsfile
               << std::endl;
     gswd.printtofile(o.resultsfile);
+  }
+  
+  if (!o.cachefile.empty()) {
+    cache.save();
   }
 
   // traverse the list and replace with symlinks
