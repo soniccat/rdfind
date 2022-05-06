@@ -36,10 +36,10 @@ Fileinfo::isImage() {
 }
 
 //void normalizeMat(cv::Mat& m) {
-//    for (int j = 0; j < m.cols; j++) {
-//        auto vptr = m.ptr(0, j);
-//        *vptr = ((float)*vptr / 255.0f) * 200;
-//    }
+//	for (int j = 0; j < m.cols; j++) {
+//		auto vptr = m.ptr(0, j);
+//		*vptr = *vptr / 10;
+//	}
 //}
 
 int
@@ -96,35 +96,77 @@ Fileinfo::fillwithbytes(enum readtobuffermode filltype,
         return 0;
       }
       break;
+    case readtobuffermode::PHASH:
+      if (isImage()) {
+        checksumtype = Checksum::PHASH;
+      } else {
+        return 0;
+      }
+      break;
     default:
       std::cerr << "does not know how to do that filltype:"
                 << static_cast<long>(filltype) << std::endl;
   }
+  
+  if (checksumtype == Checksum::PHASH) {
+    //ulong64 hash;
+    int hashSize = 8;
 
-  if (checksumtype == Checksum::AVERAGE_HASH) {
+    if (hashSize < m_somebytes.size()) {
+        cv::Mat imgHash;
+        m_cache->getPHash(name(), imgHash);
+        if (!imgHash.empty()) {
+          memcpy(m_somebytes.data(), imgHash.ptr<char>(), hashSize);
+        }
+      } else {
+        std::cerr << "sth wrong with PHASH! FIXME" << std::endl;
+      }
+    
+  } else if (checksumtype == Checksum::AVERAGE_HASH) {
      //ulong64 hash;
     int hashSize = 8;
 
+    cv::Mat img;
     cv::Mat imgHash;
     m_cache->getAverageHash(name(), imgHash);
       if (!imgHash.empty()) {
+        //normalizeMat(imgHash);
         memcpy(m_somebytes.data(), imgHash.ptr<char>(), hashSize);
      } else if (hashSize < m_somebytes.size()) {
-         cv::Mat img = cv::imread(m_filename.c_str());
-         if (img.data != NULL) {
+         img = cv::imread(m_filename.c_str());
+         if (!img.empty()) {
            auto hashPtr = cv::img_hash::AverageHash::create();
-         hashPtr->compute(img, imgHash);
-         m_cache->putAverageHash(name(), imgHash);
+           hashPtr->compute(img, imgHash);
+           m_cache->putAverageHash(name(), imgHash);
 
            //normalizeMat(imgHash);
-         memcpy(m_somebytes.data(), imgHash.ptr<char>(), hashSize);
+           memcpy(m_somebytes.data(), imgHash.ptr<char>(), hashSize);
+         
          //std::cout << "calculated hash " << imgHash << std::endl;
        } else {
+         // filter invalid image files
          setdeleteflag(true);
+         setInvalidImage(true);
        }
+       
      } else {
         std::cerr << "sth wrong with AVERAGE_HASH! FIXME" << std::endl;
-     }  
+     }
+     
+             cv::Mat imgPHash;
+        m_cache->getPHash(name(), imgPHash);
+        if (imgPHash.empty()) {
+          if (img.empty()) {
+            img = cv::imread(m_filename.c_str());
+          }
+        
+           if (!img.empty()) {
+             // precalculate phash
+             auto phashPtr = cv::img_hash::PHash::create();
+             phashPtr->compute(img, imgPHash);
+             m_cache->putPHash(name(), imgPHash);
+           }
+        }
 
   } else if (checksumtype != Checksum::NOTSET) {
     Checksum chk(checksumtype);

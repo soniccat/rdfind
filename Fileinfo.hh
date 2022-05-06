@@ -29,6 +29,7 @@ public:
     : m_info()
     , m_filename(std::move(name))
     , m_delete(false)
+    , m_invalid_image(false)
     , m_duptype(duptype::DUPTYPE_UNKNOWN)
     , m_cmdline_index(cmdline_index)
     , m_depth(depth)
@@ -51,6 +52,7 @@ public:
     CREATE_SHA1_CHECKSUM,
     CREATE_SHA256_CHECKSUM,
     AVERAGE_HASH,
+    PHASH,
   };
 
   // type of duplicate
@@ -108,6 +110,12 @@ public:
 
   /// to get the deleteflag
   bool deleteflag() const { return m_delete; }
+  
+    // sets the deleteflag
+  void setInvalidImage(bool flag) { m_invalid_image = flag; }
+
+  /// to get the deleteflag
+  bool isInvalidImage() const { return m_invalid_image; }
 
   /// returns the file size in bytes
   filesizetype size() const { return m_info.stat_size; }
@@ -180,6 +188,9 @@ private:
 
   // to be deleted or not
   bool m_delete;
+  
+    // to be deleted or not
+  bool m_invalid_image;
 
   duptype m_duptype;
 

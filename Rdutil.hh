@@ -73,7 +73,7 @@ public:
    */
   std::size_t removeUniqSizeAndBuffer();
 
-  std::size_t removeImagesWithUniqueBuffer();
+  void markImagesWithUniqueBuffer(bool skipTrueDeleteFlag);
 
   /**
    * Assumes the list is already sorted on size, and all elements with the same
@@ -84,9 +84,13 @@ public:
    *
    */
   void markduplicates();
+  
+  std::size_t removeInvalidImages();
 
   /// removes all items from the list, that have the deleteflag set to true.
   std::size_t cleanup();
+  
+  long readyToCleanup();
 
   /**
    * Removes items with file size less than minsize

@@ -26,6 +26,7 @@ public:
     SHA1,
     SHA256,
     AVERAGE_HASH,
+    PHASH
   };
 
   explicit Checksum(checksumtypes type);

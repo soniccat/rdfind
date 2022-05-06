@@ -486,15 +486,15 @@ Rdutil::removeUniqSizeAndBuffer()
   return cleanup();
 }
 
-std::size_t
-Rdutil::removeImagesWithUniqueBuffer()
+void
+Rdutil::markImagesWithUniqueBuffer(bool skipTrueDeleteFlag)
 {
-  std::for_each(
-      m_list.begin(), m_list.end(), [](Fileinfo& f) { 
-        f.setdeleteflag(!f.isImage()); 
-      }
-  );
-  cleanup();
+//  std::for_each(
+//      m_list.begin(), m_list.end(), [](Fileinfo& f) {
+//        f.setdeleteflag(!f.isImage());
+//      }
+//  );
+//  cleanup();
 
   // sort list on name
   const auto cmp = cmpBuffers;
@@ -508,7 +508,9 @@ Rdutil::removeImagesWithUniqueBuffer()
     m_list.begin(), m_list.end(), cmp, [&](Iterator first, Iterator last) {
         if (first + 1 == last) {
           // we have a unique buffer!
+          if (!skipTrueDeleteFlag) {
             first->setdeleteflag(true);
+          }
         } else {
           std::for_each(
             first, last, [](Fileinfo& f) { f.setdeleteflag(false); });
@@ -548,37 +550,37 @@ Rdutil::removeImagesWithUniqueBuffer()
   //     }
   //   });
 
-  return cleanup();
+  //return cleanup();
 }
 
-class CalcPhashThread
-{
-    std::vector<Fileinfo>::iterator begin;
-    std::vector<Fileinfo>::iterator end;
-    std::promise<std::vector<std::pair<Fileinfo, cv::Mat>>> promise;
-    
-public:
-    
-    CalcPhashThread(
-         std::vector<Fileinfo>::iterator b,
-         std::vector<Fileinfo>::iterator e,
-         std::promise<std::vector<std::pair<Fileinfo, cv::Mat>>>&& p
-     ) {
-        begin = b;
-        end = e;
-        promise = std::move(p);
-    }
-    
-    void operator()()
-    {
-        auto result = std::vector<std::pair<Fileinfo, cv::Mat>>();
-        std::for_each(begin, end, [&](Fileinfo& f) {
-            result.push_back(std::pair<Fileinfo, cv::Mat>(f, f.calcPhash()));
-        });
-        
-        promise.set_value(result);
-    }
-};
+//class CalcPhashThread
+//{
+//    std::vector<Fileinfo>::iterator begin;
+//    std::vector<Fileinfo>::iterator end;
+//    std::promise<std::vector<std::pair<Fileinfo, cv::Mat>>> promise;
+//
+//public:
+//
+//    CalcPhashThread(
+//         std::vector<Fileinfo>::iterator b,
+//         std::vector<Fileinfo>::iterator e,
+//         std::promise<std::vector<std::pair<Fileinfo, cv::Mat>>>&& p
+//     ) {
+//        begin = b;
+//        end = e;
+//        promise = std::move(p);
+//    }
+//
+//    void operator()()
+//    {
+//        auto result = std::vector<std::pair<Fileinfo, cv::Mat>>();
+//        std::for_each(begin, end, [&](Fileinfo& f) {
+//            result.push_back(std::pair<Fileinfo, cv::Mat>(f, f.calcPhash()));
+//        });
+//
+//        promise.set_value(result);
+//    }
+//};
 
 std::int64_t minInt64(std::int64_t l, std::int64_t r) {
     if (l < r) {
@@ -611,7 +613,7 @@ Rdutil::verifyByPhash()
     [this](const Iterator first, const Iterator last) {
       // size and buffer are equal in  [first,last) - all are duplicates!
       auto d = std::distance(first, last);
-      assert(d >= 2);
+      assert(d >= 2 || first->deleteflag());
         
         // calculate phashes and check distance
 //        auto phashes = std::vector<std::pair<Fileinfo,cv::Mat>>();
@@ -620,46 +622,50 @@ Rdutil::verifyByPhash()
 //          };
 //        std::for_each(first, last, calculator);
 
-        auto subVector = std::vector<Fileinfo>(first, last);
-        auto threadFutures = std::vector<std::future<std::vector<std::pair<Fileinfo, cv::Mat>>>>();
+//        auto subVector = std::vector<Fileinfo>(first, last);
+        //auto threadFutures = std::vector<std::future<std::vector<std::pair<Fileinfo, cv::Mat>>>>();
         
-        auto threads = runInParallel(
-            subVector,
-            [&, this](std::vector<Fileinfo>::iterator begin, std::vector<Fileinfo>::iterator end) {
-                auto promise = std::promise<std::vector<std::pair<Fileinfo, cv::Mat>>>();
-                threadFutures.push_back(promise.get_future());
-
-                return CalcPhashThread(
-                   begin,
-                   end,
-                   std::move(promise)
-                );
-            }
-        );
+//        auto result = std::vector<std::pair<Fileinfo, cv::Mat>>();
+//        std::for_each(subVector.begin(), subVector.end(), [&](Fileinfo& f) {
+//            result.push_back(std::pair<Fileinfo, cv::Mat>(f, f.calcPhash()));
+//        });
+//        auto threads = runInParallel(
+//            subVector,
+//            [&, this](std::vector<Fileinfo>::iterator begin, std::vector<Fileinfo>::iterator end) {
+//                auto promise = std::promise<std::vector<std::pair<Fileinfo, cv::Mat>>>();
+//                threadFutures.push_back(promise.get_future());
+//
+//                return CalcPhashThread(
+//                   begin,
+//                   end,
+//                   std::move(promise)
+//                );
+//            }
+//        );
         
-        std::for_each(threads.begin(), threads.end(), std::mem_fn(&std::thread::join));
+        //std::for_each(threads.begin(), threads.end(), std::mem_fn(&std::thread::join));
         
         
-        auto phashes = std::vector<std::pair<Fileinfo,cv::Mat>>();
-        std::for_each(threadFutures.begin(), threadFutures.end(), [&](std::future<std::vector<std::pair<Fileinfo, cv::Mat>>>& f) {
-            auto v = f.get();
-            phashes.insert(phashes.end(), v.begin(), v.end());
-        });
+//        auto phashes = std::vector<std::pair<Fileinfo,cv::Mat>>();
+//        std::for_each(threadFutures.begin(), threadFutures.end(), [&](std::future<std::vector<std::pair<Fileinfo, cv::Mat>>>& f) {
+//            auto v = f.get();
+//            phashes.insert(phashes.end(), v.begin(), v.end());
+//        });
         
         auto phashPtr = cv::img_hash::PHash::create();
-        auto results = std::vector<std::pair<Fileinfo, Fileinfo>>();
+//        auto results = std::vector<std::pair<Fileinfo, Fileinfo>>();
         auto identitySet = std::set<std::int64_t>();
         auto pairs = std::set<std::pair<std::int64_t, std::int64_t>>();
-        auto checker = [&, this](std::pair<Fileinfo,cv::Mat>& elem) mutable {
+        auto checker = [&, this](Fileinfo& elem) mutable {
             std::for_each(
-              phashes.begin(),
-              phashes.end(),
-              [&, this](std::pair<Fileinfo,cv::Mat>& e) mutable {
-                  if (elem.first.getidentity() != e.first.getidentity()) {
-                      auto d = phashPtr->compare(elem.second, e.second);
+              first,
+              last,
+              [&, this](Fileinfo& e) mutable {
+                  if (elem.getidentity() != elem.getidentity()) {
+                      auto d = phashPtr->compare(elem.calcPhash(), e.calcPhash());
                       auto pair = std::pair<std::int64_t, std::int64_t>(
-                            minInt64(elem.first.getidentity(), e.first.getidentity()),
-                            maxInt64(elem.first.getidentity(), e.first.getidentity())
+                            minInt64(elem.getidentity(), e.getidentity()),
+                            maxInt64(elem.getidentity(), e.getidentity())
                        );
                       if (d > 2 && pairs.find(pair) == pairs.end()) {
                         identitySet.insert(pair.first);
@@ -667,8 +673,8 @@ Rdutil::verifyByPhash()
                           pairs.insert(pair);
                           phashDistance.push_back(
                             {
-                              elem.first,
-                              e.first,
+                              elem,
+                              e,
                               d
                             }
                           );
@@ -677,7 +683,7 @@ Rdutil::verifyByPhash()
             }
            );
         };
-        std::for_each(phashes.begin(), phashes.end(), checker);
+        std::for_each(first, last, checker);
         
         std::for_each(m_list.begin(), m_list.end(), [&](Fileinfo& f) {
           if (identitySet.find(f.getidentity()) != identitySet.end()) {
@@ -685,7 +691,7 @@ Rdutil::verifyByPhash()
           }
         });
     });
-    cleanup();
+    //cleanup();
 }
 
 size_t Rdutil::phashDistanceCount() {
@@ -706,7 +712,10 @@ Rdutil::markduplicates()
     cmp,
     [](const Iterator first, const Iterator last) {
       // size and buffer are equal in  [first,last) - all are duplicates!
-      assert(std::distance(first, last) >= 2);
+      //assert(std::distance(first, last) >= 2);
+      if (std::distance(first, last) == 1) {
+        return;
+      }
 
       // the one with the lowest rank is the original
       auto orig = std::min_element(first, last, cmpRank);
@@ -750,6 +759,30 @@ Rdutil::cleanup()
 
   return size_before - size_after;
 }
+
+std::size_t
+Rdutil::removeInvalidImages()
+{
+  const auto size_before = m_list.size();
+  auto it = std::remove_if(m_list.begin(), m_list.end(), [](const Fileinfo& A) {
+    return A.isInvalidImage();
+  });
+
+  m_list.erase(it, m_list.end());
+
+  const auto size_after = m_list.size();
+
+  return size_before - size_after;
+}
+
+long
+Rdutil::readyToCleanup()
+{
+  return std::count_if(m_list.begin(), m_list.end(), [](const Fileinfo& f) {
+    return f.deleteflag();
+  });
+}
+
 #if 0
 std::size_t
 Rdutil::remove_small_files(Fileinfo::filesizetype minsize)

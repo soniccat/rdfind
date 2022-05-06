@@ -391,28 +391,46 @@ main(int narg, const char* argv[])
 
   modes.emplace_back(Fileinfo::readtobuffermode::AVERAGE_HASH,
                        "AVERAGE_HASH");
+  modes.emplace_back(Fileinfo::readtobuffermode::PHASH,
+                       "PHASH");
+                       
 
   for (auto it = modes.begin() + 1; it != modes.end(); ++it) {
     std::cout << dryruntext << "Now eliminating candidates based on "
-              << it->second << ": " << std::flush;
+              << it->second << ": " << std::endl;
 
     // read bytes (destroys the sorting, for disk reading efficiency)
     gswd.fillwithbytes(it[0].first, it[-1].first, o.nsecsleep);
     
-    std::cout << "removed " << gswd.cleanup()
-              << " wrong image files " << std::endl;;
+//    std::cout << "removed " << gswd.cleanup()
+//              << " wrong image files " << std::endl;
 
     // remove non-duplicates
     // std::cout << "removed " << gswd.removeUniqSizeAndBuffer()
     //           << " files from list. ";
-    std::cout << "removed " << gswd.removeImagesWithUniqueBuffer()
+    gswd.markImagesWithUniqueBuffer(it->first == Fileinfo::readtobuffermode::PHASH);
+    if (it->first == Fileinfo::readtobuffermode::AVERAGE_HASH) {
+//        std::cout << "Verifying images by Phash... ";
+        gswd.removeInvalidImages();
+        gswd.verifyByPhash();
+//        std::cout << gswd.phashDistanceCount() << " looks different" << std::endl;
+    }
+      
+    if (!o.cachefile.empty()) {
+      cache.save();
+    }
+    
+    std::cout << "Looks unique " << gswd.readyToCleanup() << std::endl;
+  }
+  
+//  добавил отметку по average hash + verifyByPhash
+//  и потом отметку по phash
+//  надо проверять теперь на сколько хорошо это все работает
+// похоже много чего удаляется надо просто ставить set mark to delete в false без true
+  
+      std::cout << "removed " << gswd.cleanup()
               << " files with unique buffer from list. ";
     std::cout << filelist.size() << " files left." << std::endl;
-      
-      std::cout << "Verifying images by Phash... ";
-      gswd.verifyByPhash();
-      std::cout << gswd.phashDistanceCount() << " looks different" << std::endl;
-  }
 
   // What is left now is a list of duplicates, ordered on size.
   // We also know the list is ordered on size, then bytes, and all unique
