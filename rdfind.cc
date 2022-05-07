@@ -341,7 +341,7 @@ main(int narg, const char* argv[])
 //    }
   }
   
-  gswd.sort_by_size_reversed(); // to have bigger file at the top
+  //gswd.sort_by_size_reversed(); // to have bigger file at the top
 
   std::cout << dryruntext << "Now have " << filelist.size()
             << " files in total." << std::endl;
@@ -368,78 +368,101 @@ main(int narg, const char* argv[])
     std::cout << "Removed " << gswd.removeNonImages()
                << " non image files from list. ";
   std::cout << filelist.size() << " files left." << std::endl;
-
-  // ok. we now need to do something stronger to disambiguate the duplicate
-  // candidates. start looking at the contents.
-  std::vector<std::pair<Fileinfo::readtobuffermode, const char*>> modes{
-    { Fileinfo::readtobuffermode::NOT_DEFINED, "" },
-    //{ Fileinfo::readtobuffermode::READ_FIRST_BYTES, "first bytes" },
-    //{ Fileinfo::readtobuffermode::READ_LAST_BYTES, "last bytes" },
-  };
-  // if (o.usemd5) {
-  //   modes.emplace_back(Fileinfo::readtobuffermode::CREATE_MD5_CHECKSUM,
-  //                      "md5 checksum");
-  // }
-  // if (o.usesha1) {
-  //   modes.emplace_back(Fileinfo::readtobuffermode::CREATE_SHA1_CHECKSUM,
-  //                      "sha1 checksum");
-  // }
-  // if (o.usesha256) {
-  //   modes.emplace_back(Fileinfo::readtobuffermode::CREATE_SHA256_CHECKSUM,
-  //                      "sha256 checksum");
-  // }
-
-  modes.emplace_back(Fileinfo::readtobuffermode::AVERAGE_HASH,
-                       "AVERAGE_HASH");
-  modes.emplace_back(Fileinfo::readtobuffermode::PHASH,
-                       "PHASH");
-                       
-
-  for (auto it = modes.begin() + 1; it != modes.end(); ++it) {
-    std::cout << dryruntext << "Now eliminating candidates based on "
-              << it->second << ": " << std::endl;
-
-    // read bytes (destroys the sorting, for disk reading efficiency)
-    gswd.fillwithbytes(it[0].first, it[-1].first, o.nsecsleep);
-    
-//    std::cout << "removed " << gswd.cleanup()
-//              << " wrong image files " << std::endl;
-
-    // remove non-duplicates
-    // std::cout << "removed " << gswd.removeUniqSizeAndBuffer()
-    //           << " files from list. ";
-    gswd.markImagesWithUniqueBuffer(it->first == Fileinfo::readtobuffermode::PHASH);
-    if (it->first == Fileinfo::readtobuffermode::AVERAGE_HASH) {
-//        std::cout << "Verifying images by Phash... ";
-        gswd.removeInvalidImages();
-        gswd.verifyByPhash();
-//        std::cout << gswd.phashDistanceCount() << " looks different" << std::endl;
-    }
-      
-    if (!o.cachefile.empty()) {
-      cache.save();
-    }
-    
-    std::cout << "Looks unique " << gswd.readyToCleanup() << std::endl;
+  
+  gswd.calcHashes();
+  
+  if (!o.cachefile.empty()) {
+    cache.save();
   }
+  
+  gswd.removeInvalidImages();
+  gswd.buildClusters();
+  
+  std::cout << "Builting clusters... " << std::endl;
+  std::cout << "Built "
+  << gswd.getClusters().size()
+  << " clusters " << std::endl;
+  
+  std::cout << "Removed  "
+  << gswd.removeSingleClusters()
+  << " single clusters " << std::endl;
+  
+  std::cout << gswd.clusterFileCount()
+  << " files left" << std::endl;
+  
+  gswd.sortClustersBySize();
+
+//  // ok. we now need to do something stronger to disambiguate the duplicate
+//  // candidates. start looking at the contents.
+//  std::vector<std::pair<Fileinfo::readtobuffermode, const char*>> modes{
+//    { Fileinfo::readtobuffermode::NOT_DEFINED, "" },
+//    //{ Fileinfo::readtobuffermode::READ_FIRST_BYTES, "first bytes" },
+//    //{ Fileinfo::readtobuffermode::READ_LAST_BYTES, "last bytes" },
+//  };
+//  // if (o.usemd5) {
+//  //   modes.emplace_back(Fileinfo::readtobuffermode::CREATE_MD5_CHECKSUM,
+//  //                      "md5 checksum");
+//  // }
+//  // if (o.usesha1) {
+//  //   modes.emplace_back(Fileinfo::readtobuffermode::CREATE_SHA1_CHECKSUM,
+//  //                      "sha1 checksum");
+//  // }
+//  // if (o.usesha256) {
+//  //   modes.emplace_back(Fileinfo::readtobuffermode::CREATE_SHA256_CHECKSUM,
+//  //                      "sha256 checksum");
+//  // }
+//
+//  modes.emplace_back(Fileinfo::readtobuffermode::AVERAGE_HASH,
+//                       "AVERAGE_HASH");
+//  modes.emplace_back(Fileinfo::readtobuffermode::PHASH,
+//                       "PHASH");
+//
+//
+//  for (auto it = modes.begin() + 1; it != modes.end(); ++it) {
+//    std::cout << dryruntext << "Now eliminating candidates based on "
+//              << it->second << ": " << std::endl;
+//
+//    // read bytes (destroys the sorting, for disk reading efficiency)
+//    gswd.fillwithbytes(it[0].first, it[-1].first, o.nsecsleep);
+//
+////    std::cout << "removed " << gswd.cleanup()
+////              << " wrong image files " << std::endl;
+//
+//    // remove non-duplicates
+//    // std::cout << "removed " << gswd.removeUniqSizeAndBuffer()
+//    //           << " files from list. ";
+//    gswd.markImagesWithUniqueBuffer(it->first == Fileinfo::readtobuffermode::PHASH);
+//    if (it->first == Fileinfo::readtobuffermode::AVERAGE_HASH) {
+////        std::cout << "Verifying images by Phash... ";
+//        gswd.removeInvalidImages();
+//        gswd.verifyByPhash();
+////        std::cout << gswd.phashDistanceCount() << " looks different" << std::endl;
+//    }
+//
+//    if (!o.cachefile.empty()) {
+//      cache.save();
+//    }
+//
+//    std::cout << "Looks unique " << gswd.readyToCleanup() << std::endl;
+//  }
   
 //  добавил отметку по average hash + verifyByPhash
 //  и потом отметку по phash
 //  надо проверять теперь на сколько хорошо это все работает
 // похоже много чего удаляется надо просто ставить set mark to delete в false без true
   
-      std::cout << "removed " << gswd.cleanup()
-              << " files with unique buffer from list. ";
-    std::cout << filelist.size() << " files left." << std::endl;
+//      std::cout << "removed " << gswd.cleanup()
+//              << " files with unique buffer from list. ";
+//    std::cout << filelist.size() << " files left." << std::endl;
 
   // What is left now is a list of duplicates, ordered on size.
   // We also know the list is ordered on size, then bytes, and all unique
   // files are gone so it contains sequences of duplicates. Go ahead and mark
   // them.
-  gswd.markduplicates();
+  //gswd.markduplicates();
 
-  std::cout << dryruntext << "It seems like you have " << filelist.size()
-            << " files that are not unique\n";
+//  std::cout << dryruntext << "It seems like you have " << filelist.size()
+//            << " files that are not unique\n";
 
   std::cout << dryruntext << "Totally, ";
   gswd.saveablespace(std::cout) << " can be reduced." << std::endl;
@@ -451,9 +474,9 @@ main(int narg, const char* argv[])
     gswd.printtofile(o.resultsfile);
   }
   
-  if (!o.cachefile.empty()) {
-    cache.save();
-  }
+//  if (!o.cachefile.empty()) {
+//    cache.save();
+//  }
 
   // traverse the list and replace with symlinks
   if (o.makesymlinks) {

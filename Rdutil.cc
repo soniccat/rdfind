@@ -26,9 +26,6 @@
 // class declaration
 #include "Rdutil.hh"
 
-#include <opencv2/opencv.hpp>
-#include <opencv2/img_hash.hpp>
-
 template <class T, class Creator>
 std::vector<std::thread> runInParallel(std::vector<T>& v, Creator creator) {
     const auto coreCount = std::thread::hardware_concurrency();
@@ -56,6 +53,15 @@ std::vector<std::thread> runInParallel(std::vector<T>& v, Creator creator) {
     return threads;
 }
 
+void Rdutil::sortClustersBySize() {
+  std::sort(clusters.begin(), clusters.end(), [](const Cluster& c1, const Cluster& c2) {
+      auto c2s = c2.size();
+      auto c1s = c1.size();
+      return ((c2s < c1s) || (c2s == c1s && c2.distance < c1.distance));
+    }
+  );
+}
+
 int
 Rdutil::printtofile(const std::string& filename) const
 {
@@ -72,24 +78,32 @@ Rdutil::printtofile(const std::string& filename) const
 
   // This uses "priority" instead of "cmdlineindex". Change this the day
   // a change in output format is allowed (for backwards compatibility).
-  output << "# Automatically generated\n";
-    if (!phashDistance.empty()) {
-      output << "# Probably similar images\n";
-      for (auto& p : phashDistance) {
-        output << "phash distance " << p.distance << " is more than 2 for " << p.f1.name() << " and " << p.f2.name() << '\n';
-      }
-  }
+//  output << "# Automatically generated\n";
+//    if (!phashDistance.empty()) {
+//      output << "# Probably similar images\n";
+//      for (auto& p : phashDistance) {
+//        output << "phash distance " << p.distance << " is more than 2 for " << p.f1.name() << " and " << p.f2.name() << '\n';
+//      }
+//  }
   
-  output << "# duptype id depth size device inode priority name\n";
+//  output << "# duptype id depth size device inode priority name\n";
+//
+//  std::vector<Fileinfo>::iterator it;
+//  for (it = m_list.begin(); it != m_list.end(); ++it) {
+//    output << Fileinfo::getduptypestring(*it) << " " << it->getidentity() << " "
+//           << it->depth() << " " << it->size() << " " << it->device() << " "
+//           << it->inode() << " " << it->get_cmdline_index() << " " << it->name()
+//           << '\n';
+//  }
+//  output << "# end of file\n";
 
-  std::vector<Fileinfo>::iterator it;
-  for (it = m_list.begin(); it != m_list.end(); ++it) {
-    output << Fileinfo::getduptypestring(*it) << " " << it->getidentity() << " "
-           << it->depth() << " " << it->size() << " " << it->device() << " "
-           << it->inode() << " " << it->get_cmdline_index() << " " << it->name()
-           << '\n';
+  for (auto& c : clusters) {
+    output << "# Section (size:" << c.size() << ", distance:" << c.getDistance() << ')' << '\n';
+    for (auto& f : c.filesSortedBySize()) {
+      output << f.size() << ' ' << f.name() << '\n';
+    }
   }
-  output << "# end of file\n";
+
   f1.close();
   return 0;
 }
@@ -883,13 +897,49 @@ Rdutil::totalsize(std::ostream& out, int opmode) const
 std::ostream&
 Rdutil::saveablespace(std::ostream& out) const
 {
-  auto size = totalsizeinbytes(0) - totalsizeinbytes(1);
+  Fileinfo::filesizetype size = 0;
+  for (auto& c : clusters) {
+    size += c.fileSizeWithoutBiggest();
+  }
+  
   int range = littlehelper::calcrange(size);
   out << size << " " << littlehelper::byteprefix(range);
   return out;
 }
 
+class CalcHashesThread {
+    std::vector<Fileinfo>::iterator begin;
+    std::vector<Fileinfo>::iterator end;
 
+public:
+    CalcHashesThread(
+      std::vector<Fileinfo>::iterator b,
+      std::vector<Fileinfo>::iterator e
+    ) {
+        begin = b;
+        end = e;
+    }
+    
+    void operator()(){
+        std::for_each(begin, end, [this](Fileinfo& f) {
+            f.calcHashes();
+        });
+    }
+};
+
+void Rdutil::calcHashes() {
+  auto threads = runInParallel(
+    m_list,
+    [](std::vector<Fileinfo>::iterator begin, std::vector<Fileinfo>::iterator end) {
+      return CalcHashesThread(
+         begin,
+         end
+      );
+    }
+  );
+
+  std::for_each(threads.begin(), threads.end(), std::mem_fn(&std::thread::join));
+}
 
 class FillWithBufferThread
 {
@@ -978,4 +1028,51 @@ Rdutil::fillwithbytes(enum Fileinfo::readtobuffermode type,
   return 0;
 }
 
+void Rdutil::buildClusters() {
+//  std::for_each(m_list.begin(), m_list.end(), [this](const Fileinfo& f) {
+//
+//
+//
+//  });
 
+  cv::Ptr<cv::img_hash::ImgHashBase> aHashPtr = cv::img_hash::AverageHash::create();
+  cv::Ptr<cv::img_hash::ImgHashBase> pHashPtr = cv::img_hash::PHash::create();
+
+  for (auto& lf : m_list) {
+    double distance = 0.0;
+    auto clusterToAddIn = std::find_if(clusters.begin(), clusters.end(), [&lf, &distance](Cluster& c) mutable {
+      return c.needAdd(lf, distance);
+    });
+    
+    if (clusterToAddIn != clusters.end()) {
+      clusterToAddIn->setDistance(distance);
+      clusterToAddIn->add(lf);
+    } else {
+      clusters.emplace_back(
+        std::vector<Fileinfo>({lf}),
+        aHashPtr,
+        pHashPtr,
+        0.0
+      );
+    }
+  }
+}
+
+size_t Rdutil::removeSingleClusters() {
+  auto size = clusters.size();
+  auto it = std::remove_if(clusters.begin(), clusters.end(), [](const Cluster& c) {
+    return c.isSingle();
+  });
+
+  clusters.erase(it, clusters.end());
+  return size - clusters.size();
+}
+
+size_t Rdutil::clusterFileCount() {
+  size_t count = 0;
+  for (auto& c : clusters) {
+    count += c.size();
+  }
+  
+  return count;
+}

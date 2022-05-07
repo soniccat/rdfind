@@ -17,6 +17,7 @@ using json = nlohmann::json;
 struct CacheEntry {
   cv::Mat averageHash;
   cv::Mat pHash;
+  bool isInvalidImage;
 };
 
 class Cache {
@@ -32,10 +33,12 @@ public:
   void load(const std::string& path);
   void putAverageHash(const std::string& name, cv::Mat& averageHash);
   void putPHash(const std::string& name, cv::Mat& pHash);
+  void putIsInvalidImage(const std::string& name, bool isInvalidImage);
   void save();
   
   void getAverageHash(const std::string& name, cv::Mat& averageHash);
   void getPHash(const std::string& name, cv::Mat& pHash);
+  bool isInvalidImage(const std::string& name);
 };
 
 

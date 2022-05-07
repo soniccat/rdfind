@@ -207,6 +207,64 @@ Fileinfo::calcPhash() {
     return hash;
 }
 
+void Fileinfo::calcHashes() {
+  int hashSize = 8;
+  cv::Mat img;
+  cv::Mat imgAHash;
+  m_cache->getAverageHash(name(), imgAHash);
+  
+  if (m_cache->isInvalidImage(name())) {
+    setdeleteflag(true);
+    setInvalidImage(true);
+    return;
+  }
+
+  if (!imgAHash.empty()) {
+    //normalizeMat(imgHash);
+    memcpy(m_somebytes.data(), imgAHash.ptr<char>(), hashSize);
+
+  } else if (hashSize < m_somebytes.size()) {
+    img = cv::imread(m_filename.c_str());
+    if (!img.empty()) {
+     auto hashPtr = cv::img_hash::AverageHash::create();
+     hashPtr->compute(img, imgAHash);
+     m_cache->putAverageHash(name(), imgAHash);
+
+     //normalizeMat(imgHash);
+     memcpy(m_somebytes.data(), imgAHash.ptr<char>(), hashSize);
+
+    //std::cout << "calculated hash " << imgHash << std::endl;
+    } else {
+     // filter invalid image files
+     setdeleteflag(true);
+     setInvalidImage(true);
+     m_cache->putIsInvalidImage(name(), true);
+    }
+  } else {
+    std::cerr << "sth wrong with AVERAGE_HASH! FIXME" << std::endl;
+  }
+   
+  cv::Mat imgPHash;
+  if (!isInvalidImage()) {
+    m_cache->getPHash(name(), imgPHash);
+
+    if (imgPHash.empty()) {
+      if (img.empty()) {
+        img = cv::imread(m_filename.c_str());
+      }
+
+      if (!img.empty()) {
+        auto phashPtr = cv::img_hash::PHash::create();
+        phashPtr->compute(img, imgPHash);
+        m_cache->putPHash(name(), imgPHash);
+      }
+    }
+  }
+  
+  aHash = imgAHash;
+  pHash = imgPHash;
+}
+
 bool
 Fileinfo::readfileinfo()
 {

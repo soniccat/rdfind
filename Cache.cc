@@ -61,7 +61,12 @@ void Cache::load(const std::string& path) {
             }
           }
           
-          map.insert({k, {aHash, pHash}});
+          bool isInvalidImage = false;
+          if (vObj.contains("isInvalidImage")) {
+            isInvalidImage = vObj["isInvalidImage"];
+          }
+          
+          map.insert({k, {aHash, pHash, isInvalidImage}});
         }
         std::cout << "Loaded " << map.size() << " records from cache" << std::endl;
     } catch (...) {
@@ -95,6 +100,17 @@ void Cache::putPHash(const std::string& name, cv::Mat& pHash) {
   }
 }
 
+void Cache::putIsInvalidImage(const std::string& name, bool isInvalidImage) {
+  auto fileIterator = map.find(name);
+  if (fileIterator != map.end()) {
+    fileIterator->second.isInvalidImage = isInvalidImage;
+  } else {
+    CacheEntry entry;
+    entry.isInvalidImage = isInvalidImage;
+    map.insert({name, entry});
+  }
+}
+
 void Cache::getAverageHash(const std::string& name, cv::Mat& averageHash) {
   auto fileIterator = map.find(name);
   if (fileIterator != map.end()) {
@@ -106,6 +122,15 @@ void Cache::getPHash(const std::string& name, cv::Mat& pHash) {
   auto fileIterator = map.find(name);
   if (fileIterator != map.end()) {
     pHash = fileIterator->second.pHash;
+  }
+}
+
+bool Cache::isInvalidImage(const std::string& name) {
+  auto fileIterator = map.find(name);
+  if (fileIterator != map.end()) {
+    return fileIterator->second.isInvalidImage;
+  } else {
+    return false;
   }
 }
 
@@ -137,6 +162,10 @@ void Cache::save() {
       json pHashJson;
       matFirstLineToJson(entry.second.pHash, pHashJson);
       pj["pHash"] = pHashJson;
+    }
+    
+    if (entry.second.isInvalidImage) {
+      pj["isInvalidImage"] = true;
     }
     
     if (!pj.empty()) {

@@ -169,6 +169,10 @@ public:
   bool isImage();
     
     cv::Mat calcPhash();
+    void calcHashes();
+    
+    const cv::Mat& getAHash() const { return aHash; }
+    const cv::Mat& getPHash() const { return pHash; }
 
 private:
   // to store info about the file
@@ -224,6 +228,9 @@ private:
   std::array<char, SomeByteSize> m_somebytes;
   
   Cache* m_cache;
+  
+  cv::Mat aHash;
+  cv::Mat pHash;
 };
 
 #endif
