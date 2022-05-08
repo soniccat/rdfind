@@ -19,6 +19,7 @@ using namespace cv;
 using namespace cv::img_hash;
 
 struct Cluster {
+  string name;
   vector<Fileinfo> files;
   Ptr<ImgHashBase> aHashPtr;
   Ptr<ImgHashBase> pHashPtr;
@@ -26,17 +27,20 @@ struct Cluster {
   
 public:
     Cluster(
+    string name,
     vector<Fileinfo> files,
     Ptr<ImgHashBase> aHashPtr,
     Ptr<ImgHashBase> pHashPtr,
     double d
     )
-        : files(files)
+        : name(name)
+        , files(files)
         , aHashPtr(aHashPtr)
         , pHashPtr(pHashPtr)
         , distance(d)
     {}
 
+  void calcDistance(Fileinfo& f, double& outDistance) const;
   bool needAdd(Fileinfo& f, double& outDistance) const;
   
   void add(Fileinfo& f);
@@ -61,6 +65,10 @@ public:
   
   double getDistance() const {
     return distance;
+  }
+  
+  const string& getName() const {
+    return name;
   }
 };
 

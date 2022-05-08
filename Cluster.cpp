@@ -7,7 +7,7 @@
 
 #include "Cluster.hh"
 
-bool Cluster::needAdd(Fileinfo& f, double& outDistance) const {
+void Cluster::calcDistance(Fileinfo& f, double& outDistance) const {
   double resultDistance = 0.0;
   for (auto& clusterFile : files) {
     auto aDistance = aHashPtr->compare(f.getAHash(), clusterFile.getAHash());
@@ -17,7 +17,11 @@ bool Cluster::needAdd(Fileinfo& f, double& outDistance) const {
   }
 
   outDistance = resultDistance;
-  return resultDistance <= 3.0;
+}
+
+bool Cluster::needAdd(Fileinfo& f, double& outDistance) const {
+  calcDistance(f, outDistance);
+  return outDistance <= 3.0;
 }
 
 void Cluster::add(Fileinfo& f) {

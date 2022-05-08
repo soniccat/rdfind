@@ -15,6 +15,7 @@
 
 #include "Fileinfo.hh" //file container
 #include "Cluster.hh"
+#include "Dirlist.hh"
 
 using namespace std;
 
@@ -27,7 +28,6 @@ public:
 
   /**
    * print file names to a file, with extra information.
-   * @param filename
    * @return zero on success
    */
   int printtofile(const string& filename) const;
@@ -37,7 +37,6 @@ public:
 
   /**
    * sorts the list on device and inode. not guaranteed to be stable.
-   * @return
    */
   int sortOnDeviceAndInode();
 
@@ -66,11 +65,13 @@ public:
    */
   
   size_t removeInvalidImages();
+  size_t removeInvalidImages(vector<Fileinfo>& files);
 
   /// removes all items from the list, that have the deleteflag set to true.
   size_t cleanup();
   
   void calcHashes();
+  void calcHashes(vector<Fileinfo>& files);
   
   long readyToCleanup();
   
@@ -79,31 +80,33 @@ public:
 
   /**
    * gets the total size, in bytes.
-   * @param opmode 0 just add everything, 1 only elements with
    * m_duptype=Fileinfo::DUPTYPE_FIRST_OCCURRENCE
-   * @return
    */
   [[gnu::pure]] Fileinfo::filesizetype totalsizeinbytes() const;
 
   /**
    * outputs a nicely formatted string "45 bytes" or "3 Gibytes"
    * where 1024 is used as base
-   * @param out
-   * @param opmode
-   * @return
    */
   ostream& totalsize(ostream& out) const;
 
   /// outputs the saveable amount of space
   ostream& saveablespace(ostream& out) const;
   
-  vector<Cluster>& getClusters() { return clusters; }
+  const vector<Cluster>& getClusters() const { return clusters; }
+  const map<string, Cluster>& getPathClusters() const { return pathClusters; }
   size_t removeSingleClusters();
   size_t clusterFileCount();
+  
+  void buildPathClusters(const char* path, Dirlist& dirlist, Cache& cache);
+  void calcClusterSortSuggestions();
 
 private:
     vector<Fileinfo>& m_list;
+    map<string, Cluster> pathClusters;
     vector<Cluster> clusters;
+    
+    map<Cluster, vector<pair<int, Cluster>>> clusterSortSuggestions;
 };
 
 #endif

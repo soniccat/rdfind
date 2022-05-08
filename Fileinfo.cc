@@ -49,7 +49,7 @@ void Fileinfo::calcHashes() {
     return;
   }
 
-  if (!imgAHash.empty()) {
+  if (imgAHash.empty()) {
     img = imread(m_filename.c_str());
     if (!img.empty()) {
      auto hashPtr = AverageHash::create();

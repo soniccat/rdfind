@@ -96,6 +96,7 @@ struct Options {
   bool deterministic = false; // be independent of filesystem order
   string resultsfile = "rdfind_results.txt"; // results file name.
   string cachefile = ""; // cache file name.
+  const char* clusterPath = ""; // path to folder-clusters
 };
 
 Options parseOptions(Parser& parser) {
@@ -142,6 +143,8 @@ Options parseOptions(Parser& parser) {
       o.remove_identical_inode = parser.get_parsed_bool();
     } else if (parser.try_parse_bool("-deterministic")) {
       o.deterministic = parser.get_parsed_bool();
+    } else if (parser.try_parse_string("-clusterpath")) {
+      o.clusterPath = parser.get_parsed_string();
     } else if (parser.current_arg_is("-help") || parser.current_arg_is("-h") ||
                parser.current_arg_is("--help")) {
       usage();
@@ -216,6 +219,12 @@ int main(int narg, const char* argv[]) {
 
   // an object to do sorting and duplicate finding
   Rdutil gswd(filelist);
+
+  if (strlen(o.clusterPath) > 0) {
+    Dirlist dirlist(o.followsymlinks);
+    gswd.buildPathClusters(o.clusterPath, dirlist, cache);
+  }
+  
   loadListOfFiles(gswd, parser, o);
 
   if (o.remove_identical_inode) {
@@ -250,9 +259,9 @@ int main(int narg, const char* argv[]) {
   << gswd.getClusters().size()
   << " clusters " << endl;
   
-  cout << "Excluded  "
-  << gswd.removeSingleClusters()
-  << " single clusters " << endl;
+//  cout << "Excluded  "
+//  << gswd.removeSingleClusters()
+//  << " single clusters " << endl;
   
   cout << gswd.clusterFileCount()
   << " files left" << endl;
@@ -264,8 +273,11 @@ int main(int narg, const char* argv[]) {
   << " can be reduced." << endl;
 
   // traverse the list and make a nice file with the results
-  cout << "Now making results file " << o.resultsfile << endl;
+  cout << "Now making results file "
+  << o.resultsfile << endl;
   gswd.printtofile(o.resultsfile);
+  
+  gswd.calcClusterSortSuggestions();
 
   return 0;
 }
@@ -295,12 +307,16 @@ void loadListOfFiles(Rdutil& gswd, Parser& parser, const Options& o) {
     }();
 
     auto lastsize = filelist.size();
-    cout << "Now scanning \"" << file_or_dir << "\"";
+    cout << "Now scanning \""
+    << file_or_dir << "\"";
     cout.flush();
+
     current_cmdline_index = parser.get_current_index();
     dirlist.walk(file_or_dir, 0);
-    cout << ", found " << filelist.size() - lastsize << " files."
-              << endl;
+
+    cout << ", found "
+    << filelist.size() - lastsize
+    << " files." << endl;
 
     // if we want deterministic output, we will sort the newly added
     // items on depth, then filename.
@@ -309,8 +325,9 @@ void loadListOfFiles(Rdutil& gswd, Parser& parser, const Options& o) {
     }
   }
 
-  cout << "Now have " << filelist.size()
-            << " files in total." << endl;
+  cout << "Now have "
+  << filelist.size()
+  << " files in total." << endl;
 
   // mark files with a number for correct ranking. The only ordering at this
   // point is that files found on early command line index are earlier in the

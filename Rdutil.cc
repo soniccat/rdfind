@@ -206,14 +206,18 @@ int64_t maxInt64(int64_t l, int64_t r) {
 }
 
 size_t Rdutil::removeInvalidImages() {
-  const auto size_before = m_list.size();
-  auto it = remove_if(m_list.begin(), m_list.end(), [](const Fileinfo& A) {
+  return removeInvalidImages(m_list);
+}
+
+size_t Rdutil::removeInvalidImages(vector<Fileinfo>& files) {
+  const auto size_before = files.size();
+  auto it = remove_if(files.begin(), files.end(), [](const Fileinfo& A) {
     return A.isInvalidImage();
   });
 
-  m_list.erase(it, m_list.end());
+  files.erase(it, files.end());
 
-  const auto size_after = m_list.size();
+  const auto size_after = files.size();
 
   return size_before - size_after;
 }
@@ -310,8 +314,12 @@ public:
 };
 
 void Rdutil::calcHashes() {
+  calcHashes(m_list);
+}
+
+void Rdutil::calcHashes(vector<Fileinfo>& files) {
   auto threads = runInParallel(
-    m_list,
+    files,
     [](vector<Fileinfo>::iterator begin, vector<Fileinfo>::iterator end) {
       return CalcHashesThread(
          begin,
@@ -344,6 +352,7 @@ void Rdutil::buildClusters() {
       clusterToAddIn->add(lf);
     } else {
       clusters.emplace_back(
+        "",
         vector<Fileinfo>({lf}),
         aHashPtr,
         pHashPtr,
@@ -370,4 +379,60 @@ size_t Rdutil::clusterFileCount() {
   }
   
   return count;
+}
+
+void Rdutil::buildPathClusters(const char* path, Dirlist& dirlist, Cache& cache) {
+  Ptr<ImgHashBase> aHashPtr = AverageHash::create();
+  Ptr<ImgHashBase> pHashPtr = PHash::create();
+  vector<Fileinfo> files;
+
+  dirlist.setcallbackfcn([this, &aHashPtr, &pHashPtr, &cache, &files](const string& path, const string& name, int depth) {
+    string expandedname = path.empty() ? name : (path + "/" + name);
+    Fileinfo f = Fileinfo(move(expandedname), 0, depth, &cache);
+    files.push_back(f);
+    
+    auto entry = pathClusters.find(path);
+    if (entry == pathClusters.end()) {
+      pathClusters.emplace(
+        path,
+        Cluster(
+          path,
+          vector<Fileinfo>({f}),
+          aHashPtr,
+          pHashPtr,
+          0.0
+        )
+      );
+    } else {
+      entry->second.add(f);
+    }
+    
+    return 0;
+  });
+
+  dirlist.walk(string(path));
+  calcHashes(files);
+}
+
+void Rdutil::calcClusterSortSuggestions() {
+  for (auto& c : clusters) {
+    cout << "Sorting cluster(size:" << c.size() << ", distance:" << c.distance << "with:" << endl;
+    for (auto& f : c.files) { cout << "  " << f.name() << endl; }
+  
+    for (auto& pathC : pathClusters) {
+      double minDistance = numeric_limits<double>::max();
+      double maxDistance = 0;
+      for (auto& f : c.files) {
+        double d;
+        if (!f.isInvalidImage()) {
+          pathC.second.calcDistance(f, d);
+          minDistance = fmin(minDistance, d);
+          maxDistance = fmax(maxDistance, d);
+        }
+      }
+      
+      cout << "Sorting cluster with:" << endl;
+      cout << " " << pathC.second.getName() << " min:" << minDistance << " max:" << maxDistance << endl;
+    }
+  }
 }

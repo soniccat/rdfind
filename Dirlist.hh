@@ -25,10 +25,11 @@ private:
 
   // where to report found files. this is called for every item in all
   // directories found by walk.
-  typedef int (*reportfcntype)(const std::string&, const std::string&, int);
+  //typedef int (*reportfcntype)(const std::string&, const std::string&, int);
 
   // called when a regular file or a symlink is encountered
-  reportfcntype m_callback;
+  //reportfcntype m_callback;
+  std::function<int(const std::string&, const std::string&, int)> m_callback;
 
   // a function that is called from walk when a non-directory is encountered
   // for instance,if walk("/path/to/a/file.ext") is called instead of
@@ -40,7 +41,7 @@ public:
   int walk(const std::string& dir, const int recursionlevel = 0);
 
   // to set the report functions
-  void setcallbackfcn(reportfcntype reportfcn) { m_callback = reportfcn; }
+  void setcallbackfcn(std::function<int(const std::string&, const std::string&, int)> reportfcn) { m_callback = reportfcn; }
 };
 
 #endif
