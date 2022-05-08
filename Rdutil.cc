@@ -99,8 +99,10 @@ Rdutil::printtofile(const std::string& filename) const
 
   for (auto& c : clusters) {
     output << "# Section (size:" << c.size() << ", distance:" << c.getDistance() << ')' << '\n';
+    int n = 0;
     for (auto& f : c.filesSortedBySize()) {
-      output << f.size() << ' ' << f.name() << '\n';
+      output << n << ":" << f.size() << ' ' << f.name() << '\n';
+      ++n;
     }
   }
 
