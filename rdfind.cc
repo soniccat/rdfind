@@ -23,12 +23,16 @@
 
 #include "Cache.hh"
 
+using namespace std;
+
 // global variables
 
 // this vector holds the information about all files found
-std::vector<Fileinfo> filelist;
+vector<Fileinfo> filelist;
 struct Options;
 const Options* global_options{};
+
+void loadListOfFiles(Rdutil& gswd, Parser& parser, const Options& o);
 
 /**
  * this contains the command line index for the path currently
@@ -40,7 +44,7 @@ int current_cmdline_index = 0;
 static void
 usage()
 {
-  std::cout
+  cout
     << "Usage: "
     << "rdfind [options] FILE ...\n"
     << '\n'
@@ -64,24 +68,11 @@ usage()
     << " -followsymlinks    true |(false) follow symlinks\n"
     << " -removeidentinode (true)| false  ignore files with nonunique "
        "device and inode\n"
-    << " -checksum           md5 |(sha1)| sha256\n"
-    << "                                  checksum type\n"
     << " -deterministic    (true)| false  makes results independent of order\n"
     << "                                  from listing the filesystem\n"
-    << " -makesymlinks      true |(false) replace duplicate files with "
-       "symbolic links\n"
-    << " -makehardlinks     true |(false) replace duplicate files with "
-       "hard links\n"
-    << " -makeresultsfile  (true)| false  makes a results file\n"
     << " -outputname  name  sets the results file name to \"name\" "
        "(default results.txt)\n"
     << " -deleteduplicates  true |(false) delete duplicate files\n"
-    << " -sleep              Xms          sleep for X milliseconds between "
-       "file reads.\n"
-    << "                                  Default is 0. Only a few values\n"
-    << "                                  are supported; 0,1-5,10,25,50,100\n"
-    << " -dryrun|-n         true |(false) print to stdout instead of "
-       "changing anything\n"
     << " -h|-help|--help                  show this help and exit\n"
     << " -v|--version                     display version number and exit\n"
     << '\n'
@@ -94,39 +85,27 @@ usage()
 
 Cache cache;
 
-struct Options
-{
+struct Options {
   // operation mode and default values
-  bool makesymlinks = false;   // turn duplicates into symbolic links
-  bool makehardlinks = false;  // turn duplicates into hard links
-  bool makeresultsfile = true; // write a results file
   Fileinfo::filesizetype minimumfilesize =
     1; // minimum file size to be noticed (0 - include empty files)
   Fileinfo::filesizetype maximumfilesize =
     0; // if nonzero, files this size or larger are ignored
-  bool deleteduplicates = false;      // delete duplicate files
   bool followsymlinks = false;        // follow symlinks
-  bool dryrun = false;                // only dryrun, don't destroy anything
   bool remove_identical_inode = true; // remove files with identical inodes
-  bool usemd5 = false;       // use md5 checksum to check for similarity
-  bool usesha1 = false;      // use sha1 checksum to check for similarity
-  bool usesha256 = false;    // use sha256 checksum to check for similarity
-  bool deterministic = true; // be independent of filesystem order
-  long nsecsleep = 0; // number of nanoseconds to sleep between each file read.
-  std::string resultsfile = "rdfind_results.txt"; // results file name.
-  std::string cachefile = ""; // cache file name.
+  bool deterministic = false; // be independent of filesystem order
+  string resultsfile = "rdfind_results.txt"; // results file name.
+  string cachefile = ""; // cache file name.
 };
 
-Options
-parseOptions(Parser& parser)
-{
+Options parseOptions(Parser& parser) {
   Options o;
   for (; parser.has_args_left(); parser.advance()) {
     // empty strings are forbidden as input since they can not be file names or
     // options
     if (parser.get_current_arg()[0] == '\0') {
-      std::cerr << "bad argument " << parser.get_current_index() << '\n';
-      std::exit(EXIT_FAILURE);
+      cerr << "bad argument " << parser.get_current_index() << '\n';
+      exit(EXIT_FAILURE);
     }
 
     // if we reach the end of the argument list - exit the loop and proceed with
@@ -135,13 +114,7 @@ parseOptions(Parser& parser)
       // end of argument list - exit!
       break;
     }
-    if (parser.try_parse_bool("-makesymlinks")) {
-      o.makesymlinks = parser.get_parsed_bool();
-    } else if (parser.try_parse_bool("-makehardlinks")) {
-      o.makehardlinks = parser.get_parsed_bool();
-    } else if (parser.try_parse_bool("-makeresultsfile")) {
-      o.makeresultsfile = parser.get_parsed_bool();
-    } else if (parser.try_parse_string("-outputname")) {
+    if (parser.try_parse_string("-outputname")) {
       o.resultsfile = parser.get_parsed_string();
     } else if (parser.try_parse_string("-cachename")) {
       o.cachefile = parser.get_parsed_string();
@@ -152,137 +125,82 @@ parseOptions(Parser& parser)
         o.minimumfilesize = 0;
       }
     } else if (parser.try_parse_string("-minsize")) {
-      const long long minsize = std::stoll(parser.get_parsed_string());
+      const long long minsize = stoll(parser.get_parsed_string());
       if (minsize < 0) {
-        throw std::runtime_error("negative value of minsize not allowed");
+        throw runtime_error("negative value of minsize not allowed");
       }
       o.minimumfilesize = minsize;
     } else if (parser.try_parse_string("-maxsize")) {
-      const long long maxsize = std::stoll(parser.get_parsed_string());
+      const long long maxsize = stoll(parser.get_parsed_string());
       if (maxsize < 0) {
-        throw std::runtime_error("negative value of maxsize not allowed");
+        throw runtime_error("negative value of maxsize not allowed");
       }
       o.maximumfilesize = maxsize;
-    } else if (parser.try_parse_bool("-deleteduplicates")) {
-      o.deleteduplicates = parser.get_parsed_bool();
     } else if (parser.try_parse_bool("-followsymlinks")) {
       o.followsymlinks = parser.get_parsed_bool();
-    } else if (parser.try_parse_bool("-dryrun")) {
-      o.dryrun = parser.get_parsed_bool();
-    } else if (parser.try_parse_bool("-n")) {
-      o.dryrun = parser.get_parsed_bool();
     } else if (parser.try_parse_bool("-removeidentinode")) {
       o.remove_identical_inode = parser.get_parsed_bool();
     } else if (parser.try_parse_bool("-deterministic")) {
       o.deterministic = parser.get_parsed_bool();
-    } else if (parser.try_parse_string("-checksum")) {
-      if (parser.parsed_string_is("md5")) {
-        o.usemd5 = true;
-      } else if (parser.parsed_string_is("sha1")) {
-        o.usesha1 = true;
-      } else if (parser.parsed_string_is("sha256")) {
-        o.usesha256 = true;
-      } else {
-        std::cerr << "expected md5/sha1/sha256, not \""
-                  << parser.get_parsed_string() << "\"\n";
-        std::exit(EXIT_FAILURE);
-      }
-    } else if (parser.try_parse_string("-sleep")) {
-      const auto nextarg = std::string(parser.get_parsed_string());
-      if (nextarg == "1ms") {
-        o.nsecsleep = 1000000;
-      } else if (nextarg == "2ms") {
-        o.nsecsleep = 2000000;
-      } else if (nextarg == "3ms") {
-        o.nsecsleep = 3000000;
-      } else if (nextarg == "4ms") {
-        o.nsecsleep = 4000000;
-      } else if (nextarg == "5ms") {
-        o.nsecsleep = 5000000;
-      } else if (nextarg == "10ms") {
-        o.nsecsleep = 10000000;
-      } else if (nextarg == "25ms") {
-        o.nsecsleep = 25000000;
-      } else if (nextarg == "50ms") {
-        o.nsecsleep = 50000000;
-      } else if (nextarg == "100ms") {
-        o.nsecsleep = 100000000;
-      } else {
-        std::cerr << "sorry, can only understand a few sleep values for "
-                     "now. \""
-                  << nextarg << "\" is not among them.\n";
-        std::exit(EXIT_FAILURE);
-      }
     } else if (parser.current_arg_is("-help") || parser.current_arg_is("-h") ||
                parser.current_arg_is("--help")) {
       usage();
-      std::exit(EXIT_SUCCESS);
+      exit(EXIT_SUCCESS);
     } else if (parser.current_arg_is("-version") ||
                parser.current_arg_is("--version") ||
                parser.current_arg_is("-v")) {
-      std::cout << "This is rdfind version " << VERSION << '\n';
-      std::exit(EXIT_SUCCESS);
+      cout << "This is rdfind version " << VERSION << '\n';
+      exit(EXIT_SUCCESS);
     } else {
-      std::cerr << "did not understand option " << parser.get_current_index()
+      cerr << "did not understand option " << parser.get_current_index()
                 << ":\"" << parser.get_current_arg() << "\"\n";
-      std::exit(EXIT_FAILURE);
+      exit(EXIT_FAILURE);
     }
   }
 
   // fix default values
   if (o.maximumfilesize == 0) {
-    o.maximumfilesize = std::numeric_limits<decltype(o.maximumfilesize)>::max();
+    o.maximumfilesize = numeric_limits<decltype(o.maximumfilesize)>::max();
   }
 
   // verify conflicting arguments
   if (!(o.minimumfilesize < o.maximumfilesize)) {
-    std::cerr << "maximum filesize " << o.maximumfilesize
+    cerr << "maximum filesize " << o.maximumfilesize
               << " must be larger than minimum filesize " << o.minimumfilesize
               << "\n";
-    std::exit(EXIT_FAILURE);
+    exit(EXIT_FAILURE);
   }
 
   // done with parsing of options. remaining arguments are files and dirs.
-
-  // decide what checksum to use - if no checksum is set, force sha1!
-  if (!o.usemd5 && !o.usesha1 && !o.usesha256) {
-    o.usesha1 = true;
-  }
   return o;
 }
 
 // function to add items to the list of all files
-static int
-report(const std::string& path, const std::string& name, int depth)
-{
-
+static int report(const string& path, const string& name, int depth) {
   RDDEBUG("report(" << path.c_str() << "," << name.c_str() << "," << depth
-                    << ")" << std::endl);
+                    << ")" << endl);
 
   // expand the name if the path is nonempty
-  std::string expandedname = path.empty() ? name : (path + "/" + name);
+  string expandedname = path.empty() ? name : (path + "/" + name);
 
-//Cache c;
-  Fileinfo tmp(std::move(expandedname), current_cmdline_index, depth, &cache);
+  Fileinfo tmp(move(expandedname), current_cmdline_index, depth, &cache);
   if (tmp.readfileinfo()) {
     if (tmp.isRegularFile()) {
       const auto size = tmp.size();
       if (size >= global_options->minimumfilesize &&
           size < global_options->maximumfilesize) {
-        filelist.emplace_back(std::move(tmp));
+        filelist.emplace_back(move(tmp));
       }
     }
   } else {
-    std::cerr << "failed to read file info on file \"" << tmp.name() << '\n';
+    cerr << "failed to read file info on file \"" << tmp.name() << '\n';
     return -1;
   }
   return 0;
 }
 
 
-int
-main(int narg, const char* argv[])
-{
+int main(int narg, const char* argv[]) {
   if (narg == 1) {
     usage();
     return 0;
@@ -290,19 +208,69 @@ main(int narg, const char* argv[])
 
   // parse the input arguments
   Parser parser(narg, argv);
-
   const Options o = parseOptions(parser);
 
   if (!o.cachefile.empty()) {
     cache.load(o.cachefile);
   }
 
-  // set the dryrun string
-  const std::string dryruntext(o.dryrun ? "(DRYRUN MODE) " : "");
-
   // an object to do sorting and duplicate finding
   Rdutil gswd(filelist);
+  loadListOfFiles(gswd, parser, o);
 
+  if (o.remove_identical_inode) {
+    // remove files with identical devices and inodes from the list
+    cout << "Excluded "
+    << gswd.removeIdenticalInodes()
+    << " files due to nonunique device and inode." << endl;
+  }
+
+  cout << "Total size is "
+  << gswd.totalsizeinbytes()
+  << " bytes or ";
+  gswd.totalsize(cout) << endl;
+
+  cout << "Excluded "
+  << gswd.removeNonImages()
+  << " non image files from list. ";
+  
+  cout << filelist.size()
+  << " files left." << endl;
+  
+  gswd.calcHashes();
+  if (!o.cachefile.empty()) {
+    cache.save();
+  }
+
+  gswd.removeInvalidImages();
+  gswd.buildClusters();
+
+  cout << "Builting clusters... " << endl;
+  cout << "Built "
+  << gswd.getClusters().size()
+  << " clusters " << endl;
+  
+  cout << "Excluded  "
+  << gswd.removeSingleClusters()
+  << " single clusters " << endl;
+  
+  cout << gswd.clusterFileCount()
+  << " files left" << endl;
+  
+  gswd.sortClustersBySize();
+
+  cout << "Totally, ";
+  gswd.saveablespace(cout)
+  << " can be reduced." << endl;
+
+  // traverse the list and make a nice file with the results
+  cout << "Now making results file " << o.resultsfile << endl;
+  gswd.printtofile(o.resultsfile);
+
+  return 0;
+}
+
+void loadListOfFiles(Rdutil& gswd, Parser& parser, const Options& o) {
   // an object to traverse the directory structure
   Dirlist dirlist(o.followsymlinks);
 
@@ -317,8 +285,8 @@ main(int narg, const char* argv[])
   // done with arguments. start parsing files and directories!
   for (; parser.has_args_left(); parser.advance()) {
     // get the next arg.
-    const std::string file_or_dir = [&]() {
-      std::string arg(parser.get_current_arg());
+    const string file_or_dir = [&]() {
+      string arg(parser.get_current_arg());
       // remove trailing /
       while (arg.back() == '/' && arg.size() > 1) {
         arg.erase(arg.size() - 1);
@@ -327,180 +295,25 @@ main(int narg, const char* argv[])
     }();
 
     auto lastsize = filelist.size();
-    std::cout << dryruntext << "Now scanning \"" << file_or_dir << "\"";
-    std::cout.flush();
+    cout << "Now scanning \"" << file_or_dir << "\"";
+    cout.flush();
     current_cmdline_index = parser.get_current_index();
     dirlist.walk(file_or_dir, 0);
-    std::cout << ", found " << filelist.size() - lastsize << " files."
-              << std::endl;
+    cout << ", found " << filelist.size() - lastsize << " files."
+              << endl;
 
     // if we want deterministic output, we will sort the newly added
     // items on depth, then filename.
-//    if (o.deterministic) {
-//      gswd.sort_on_depth_and_name(lastsize);
-//    }
+    if (o.deterministic) {
+      gswd.sort_on_depth_and_name(lastsize);
+    }
   }
-  
-  //gswd.sort_by_size_reversed(); // to have bigger file at the top
 
-  std::cout << dryruntext << "Now have " << filelist.size()
-            << " files in total." << std::endl;
+  cout << "Now have " << filelist.size()
+            << " files in total." << endl;
 
   // mark files with a number for correct ranking. The only ordering at this
   // point is that files found on early command line index are earlier in the
   // list.
   gswd.markitems();
-
-  if (o.remove_identical_inode) {
-    // remove files with identical devices and inodes from the list
-    std::cout << dryruntext << "Removed " << gswd.removeIdenticalInodes()
-              << " files due to nonunique device and inode." << std::endl;
-  }
-
-  std::cout << dryruntext << "Total size is " << gswd.totalsizeinbytes()
-            << " bytes or ";
-  gswd.totalsize(std::cout) << std::endl;
-
-  // std::cout << "Removed " << gswd.removeUniqueSizes()
-  //           << " files due to unique sizes from list. ";
-  //std::cout << "Removed " << gswd.removeUniqueNames()
-  //           << " files due to unique names from list. ";
-    std::cout << "Removed " << gswd.removeNonImages()
-               << " non image files from list. ";
-  std::cout << filelist.size() << " files left." << std::endl;
-  
-  gswd.calcHashes();
-  
-  if (!o.cachefile.empty()) {
-    cache.save();
-  }
-  
-  gswd.removeInvalidImages();
-  gswd.buildClusters();
-  
-  std::cout << "Builting clusters... " << std::endl;
-  std::cout << "Built "
-  << gswd.getClusters().size()
-  << " clusters " << std::endl;
-  
-  std::cout << "Removed  "
-  << gswd.removeSingleClusters()
-  << " single clusters " << std::endl;
-  
-  std::cout << gswd.clusterFileCount()
-  << " files left" << std::endl;
-  
-  gswd.sortClustersBySize();
-
-//  // ok. we now need to do something stronger to disambiguate the duplicate
-//  // candidates. start looking at the contents.
-//  std::vector<std::pair<Fileinfo::readtobuffermode, const char*>> modes{
-//    { Fileinfo::readtobuffermode::NOT_DEFINED, "" },
-//    //{ Fileinfo::readtobuffermode::READ_FIRST_BYTES, "first bytes" },
-//    //{ Fileinfo::readtobuffermode::READ_LAST_BYTES, "last bytes" },
-//  };
-//  // if (o.usemd5) {
-//  //   modes.emplace_back(Fileinfo::readtobuffermode::CREATE_MD5_CHECKSUM,
-//  //                      "md5 checksum");
-//  // }
-//  // if (o.usesha1) {
-//  //   modes.emplace_back(Fileinfo::readtobuffermode::CREATE_SHA1_CHECKSUM,
-//  //                      "sha1 checksum");
-//  // }
-//  // if (o.usesha256) {
-//  //   modes.emplace_back(Fileinfo::readtobuffermode::CREATE_SHA256_CHECKSUM,
-//  //                      "sha256 checksum");
-//  // }
-//
-//  modes.emplace_back(Fileinfo::readtobuffermode::AVERAGE_HASH,
-//                       "AVERAGE_HASH");
-//  modes.emplace_back(Fileinfo::readtobuffermode::PHASH,
-//                       "PHASH");
-//
-//
-//  for (auto it = modes.begin() + 1; it != modes.end(); ++it) {
-//    std::cout << dryruntext << "Now eliminating candidates based on "
-//              << it->second << ": " << std::endl;
-//
-//    // read bytes (destroys the sorting, for disk reading efficiency)
-//    gswd.fillwithbytes(it[0].first, it[-1].first, o.nsecsleep);
-//
-////    std::cout << "removed " << gswd.cleanup()
-////              << " wrong image files " << std::endl;
-//
-//    // remove non-duplicates
-//    // std::cout << "removed " << gswd.removeUniqSizeAndBuffer()
-//    //           << " files from list. ";
-//    gswd.markImagesWithUniqueBuffer(it->first == Fileinfo::readtobuffermode::PHASH);
-//    if (it->first == Fileinfo::readtobuffermode::AVERAGE_HASH) {
-////        std::cout << "Verifying images by Phash... ";
-//        gswd.removeInvalidImages();
-//        gswd.verifyByPhash();
-////        std::cout << gswd.phashDistanceCount() << " looks different" << std::endl;
-//    }
-//
-//    if (!o.cachefile.empty()) {
-//      cache.save();
-//    }
-//
-//    std::cout << "Looks unique " << gswd.readyToCleanup() << std::endl;
-//  }
-  
-//  добавил отметку по average hash + verifyByPhash
-//  и потом отметку по phash
-//  надо проверять теперь на сколько хорошо это все работает
-// похоже много чего удаляется надо просто ставить set mark to delete в false без true
-  
-//      std::cout << "removed " << gswd.cleanup()
-//              << " files with unique buffer from list. ";
-//    std::cout << filelist.size() << " files left." << std::endl;
-
-  // What is left now is a list of duplicates, ordered on size.
-  // We also know the list is ordered on size, then bytes, and all unique
-  // files are gone so it contains sequences of duplicates. Go ahead and mark
-  // them.
-  //gswd.markduplicates();
-
-//  std::cout << dryruntext << "It seems like you have " << filelist.size()
-//            << " files that are not unique\n";
-
-  std::cout << dryruntext << "Totally, ";
-  gswd.saveablespace(std::cout) << " can be reduced." << std::endl;
-
-  // traverse the list and make a nice file with the results
-  if (o.makeresultsfile) {
-    std::cout << dryruntext << "Now making results file " << o.resultsfile
-              << std::endl;
-    gswd.printtofile(o.resultsfile);
-  }
-  
-//  if (!o.cachefile.empty()) {
-//    cache.save();
-//  }
-
-  // traverse the list and replace with symlinks
-  if (o.makesymlinks) {
-    std::cout << dryruntext << "Now making symbolic links. creating "
-              << std::endl;
-    const auto tmp = gswd.makesymlinks(o.dryrun);
-    std::cout << "Making " << tmp << " links." << std::endl;
-    return 0;
-  }
-
-  // traverse the list and replace with hard links
-  if (o.makehardlinks) {
-    std::cout << dryruntext << "Now making hard links." << std::endl;
-    const auto tmp = gswd.makehardlinks(o.dryrun);
-    std::cout << dryruntext << "Making " << tmp << " links." << std::endl;
-    return 0;
-  }
-
-  // traverse the list and delete files
-  if (o.deleteduplicates) {
-    std::cout << dryruntext << "Now deleting duplicates:" << std::endl;
-    const auto tmp = gswd.deleteduplicates(o.dryrun);
-    std::cout << dryruntext << "Deleted " << tmp << " files." << std::endl;
-    return 0;
-  }
-  return 0;
 }

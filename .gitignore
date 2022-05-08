@@ -23,3 +23,7 @@ test-driver
 nettle32bit/
 *.log
 rdfind-*.tar.gz
+*.DS_Store
+xcode/rdfind.xcodeproj/xcshareddata*
+xcode/rdfind.xcodeproj/project.xcworkspace/xcuserdata/*
+xcode/rdfind.xcodeproj/xcuserdata/*

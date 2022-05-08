@@ -16,6 +16,9 @@
 #include <opencv2/opencv.hpp>
 #include "Cache.hh"
 
+using namespace std;
+using namespace cv;
+
 /**
  Holds information about a file.
  Keeping this small is probably beneficial for performance, because the
@@ -25,93 +28,31 @@ class Fileinfo
 {
 public:
   // constructor
-  Fileinfo(std::string name, int cmdline_index, int depth, Cache* c)
+  Fileinfo(string name, int cmdline_index, int depth, Cache* c)
     : m_info()
-    , m_filename(std::move(name))
-    , m_delete(false)
+    , m_filename(move(name))
     , m_invalid_image(false)
-    , m_duptype(duptype::DUPTYPE_UNKNOWN)
     , m_cmdline_index(cmdline_index)
     , m_depth(depth)
     , m_identity(0)
     , m_cache(c)
   {
-    m_somebytes.fill('\0');
   }
 
   /// for storing file size in bytes, defined in sys/types.h
   using filesizetype = off_t;
 
-  // enums used to tell how to read data into the buffer
-  enum class readtobuffermode : signed char
-  {
-    NOT_DEFINED = -1,
-    READ_FIRST_BYTES = 0,
-    READ_LAST_BYTES = 1,
-    CREATE_MD5_CHECKSUM = 2,
-    CREATE_SHA1_CHECKSUM,
-    CREATE_SHA256_CHECKSUM,
-    AVERAGE_HASH,
-    PHASH,
-  };
-
-  // type of duplicate
-  enum class duptype : char
-  {
-    DUPTYPE_UNKNOWN,
-    DUPTYPE_FIRST_OCCURRENCE,
-    DUPTYPE_WITHIN_SAME_TREE,
-    DUPTYPE_OUTSIDE_TREE
-  };
-
-  /**
-   * gets a string with duptype
-   * @param A
-   * @return
-   */
-  [[gnu::pure]] static const char* getduptypestring(const Fileinfo& A);
-  void setduptype(enum duptype duptype_) { m_duptype = duptype_; }
-
-  std::int64_t getidentity() const { return m_identity; }
-  static std::int64_t identity(const Fileinfo& A) { return A.getidentity(); }
-  void setidentity(std::int64_t id) { m_identity = id; }
+  int64_t getidentity() const { return m_identity; }
+  static int64_t identity(const Fileinfo& A) { return A.getidentity(); }
+  void setidentity(int64_t id) { m_identity = id; }
 
   /**
    * reads info about the file, by querying the filesystem.
    * @return false if it was not possible to get the information.
    */
   bool readfileinfo();
-
-  duptype getduptype() const { return m_duptype; }
-
-  /// makes a symlink of "this" that points to A.
-  int makesymlink(const Fileinfo& A);
-
-  /// makes a hardlink of "this" that points to A.
-  int makehardlink(const Fileinfo& A);
-
-  /**
-   * deletes the file from the file system
-   * @return zero on success
-   */
-  int deletefile();
-
-  // makes a symlink of A that points to B
-  static int static_makesymlink(Fileinfo& A, const Fileinfo& B);
-
-  // makes a hard link of A that points to B
-  static int static_makehardlink(Fileinfo& A, const Fileinfo& B);
-
-  // deletes file A, that is a duplicate of B
-  static int static_deletefile(Fileinfo& A, const Fileinfo& B);
-
-  // sets the deleteflag
-  void setdeleteflag(bool flag) { m_delete = flag; }
-
-  /// to get the deleteflag
-  bool deleteflag() const { return m_delete; }
   
-    // sets the deleteflag
+  // sets the deleteflag
   void setInvalidImage(bool flag) { m_invalid_image = flag; }
 
   /// to get the deleteflag
@@ -124,8 +65,7 @@ public:
   bool isempty() const { return size() == 0; }
 
   /// filesize comparison
-  bool is_smaller_than(Fileinfo::filesizetype minsize) const
-  {
+  bool is_smaller_than(Fileinfo::filesizetype minsize) const {
     return size() < minsize;
   }
 
@@ -136,7 +76,7 @@ public:
   unsigned long device() const { return m_info.stat_dev; }
 
   // gets the filename
-  const std::string& name() const { return m_filename; }
+  const string& name() const { return m_filename; }
 
   // gets the command line index this item was found at
   int get_cmdline_index() const { return m_cmdline_index; }
@@ -144,35 +84,16 @@ public:
   // gets the depth
   int depth() const { return m_depth; }
 
-  /**
-   * fills with bytes from the file. if lasttype is supplied,
-   * it is used to see if the file needs to be read again - useful if the file
-   * is shorter than the length of the bytes field.
-   * @param filltype
-   * @param lasttype
-   * @return zero on success
-   */
-  int fillwithbytes(enum readtobuffermode filltype,
-                    enum readtobuffermode lasttype);
-
-  /// get a pointer to the bytes read from the file
-  const char* getbyteptr() const { return m_somebytes.data(); }
-
-  std::size_t getbuffersize() const { return m_somebytes.size(); }
-
   /// returns true if file is a regular file. call readfileinfo first!
   bool isRegularFile() const { return m_info.is_file; }
 
   // returns true if file is a directory . call readfileinfo first!
   bool isDirectory() const { return m_info.is_directory; }
-
   bool isImage();
-    
-    cv::Mat calcPhash();
-    void calcHashes();
-    
-    const cv::Mat& getAHash() const { return aHash; }
-    const cv::Mat& getPHash() const { return pHash; }
+  void calcHashes();
+  
+  const Mat& getAHash() const { return aHash; }
+  const Mat& getPHash() const { return pHash; }
 
 private:
   // to store info about the file
@@ -188,15 +109,9 @@ private:
   Fileinfostat m_info;
 
   // to keep the name of the file, including path
-  std::string m_filename;
+  string m_filename;
 
-  // to be deleted or not
-  bool m_delete;
-  
-    // to be deleted or not
   bool m_invalid_image;
-
-  duptype m_duptype;
 
   // If two files are found to be identical, the one with highest ranking is
   // chosen. The rules are listed in the man page.
@@ -218,19 +133,12 @@ private:
   /**
    * a number to identify this individual file. used for ranking.
    */
-  std::int64_t m_identity;
+  int64_t m_identity;
 
-  enum ByteSize
-  {
-    SomeByteSize = 64
-  };
-  /// a buffer that will be filled with some bytes of the file or a hash
-  std::array<char, SomeByteSize> m_somebytes;
-  
   Cache* m_cache;
   
-  cv::Mat aHash;
-  cv::Mat pHash;
+  Mat aHash;
+  Mat pHash;
 };
 
 #endif

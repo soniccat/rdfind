@@ -7,8 +7,6 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		D6223FDA2821A4640074F1AF /* Checksum.cc in Sources */ = {isa = PBXBuildFile; fileRef = D6223FCA2821A4630074F1AF /* Checksum.cc */; };
-		D6223FDB2821A4640074F1AF /* UndoableUnlink.cc in Sources */ = {isa = PBXBuildFile; fileRef = D6223FCB2821A4630074F1AF /* UndoableUnlink.cc */; };
 		D6223FDC2821A4640074F1AF /* Dirlist.cc in Sources */ = {isa = PBXBuildFile; fileRef = D6223FCC2821A4630074F1AF /* Dirlist.cc */; };
 		D6223FDD2821A4640074F1AF /* EasyRandom.cc in Sources */ = {isa = PBXBuildFile; fileRef = D6223FCD2821A4630074F1AF /* EasyRandom.cc */; };
 		D6223FDE2821A4640074F1AF /* Fileinfo.cc in Sources */ = {isa = PBXBuildFile; fileRef = D6223FCF2821A4630074F1AF /* Fileinfo.cc */; };
@@ -16,6 +14,8 @@
 		D6223FE02821A4640074F1AF /* rdfind.cc in Sources */ = {isa = PBXBuildFile; fileRef = D6223FD42821A4640074F1AF /* rdfind.cc */; };
 		D6223FE12821A4640074F1AF /* Rdutil.cc in Sources */ = {isa = PBXBuildFile; fileRef = D6223FD82821A4640074F1AF /* Rdutil.cc */; };
 		D6223FE22821A4640074F1AF /* Cache.cc in Sources */ = {isa = PBXBuildFile; fileRef = D6223FD92821A4640074F1AF /* Cache.cc */; };
+		D68C79CF2827AFBC007C9AE5 /* Cluster.cpp in Sources */ = {isa = PBXBuildFile; fileRef = D68C79CE2827AFBC007C9AE5 /* Cluster.cpp */; };
+		D68C79D32827CA4B007C9AE5 /* Tools.cc in Sources */ = {isa = PBXBuildFile; fileRef = D68C79D22827CA4B007C9AE5 /* Tools.cc */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -33,8 +33,6 @@
 /* Begin PBXFileReference section */
 		D6223FC82821A4630074F1AF /* Fileinfo.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = Fileinfo.hh; path = ../../Fileinfo.hh; sourceTree = "<group>"; };
 		D6223FC92821A4630074F1AF /* CmdlineParser.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = CmdlineParser.hh; path = ../../CmdlineParser.hh; sourceTree = "<group>"; };
-		D6223FCA2821A4630074F1AF /* Checksum.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Checksum.cc; path = ../../Checksum.cc; sourceTree = "<group>"; };
-		D6223FCB2821A4630074F1AF /* UndoableUnlink.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = UndoableUnlink.cc; path = ../../UndoableUnlink.cc; sourceTree = "<group>"; };
 		D6223FCC2821A4630074F1AF /* Dirlist.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Dirlist.cc; path = ../../Dirlist.cc; sourceTree = "<group>"; };
 		D6223FCD2821A4630074F1AF /* EasyRandom.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = EasyRandom.cc; path = ../../EasyRandom.cc; sourceTree = "<group>"; };
 		D6223FCE2821A4630074F1AF /* Cache.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = Cache.hh; path = ../../Cache.hh; sourceTree = "<group>"; };
@@ -42,15 +40,17 @@
 		D6223FD02821A4630074F1AF /* Rdutil.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = Rdutil.hh; path = ../../Rdutil.hh; sourceTree = "<group>"; };
 		D6223FD12821A4630074F1AF /* CmdlineParser.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = CmdlineParser.cc; path = ../../CmdlineParser.cc; sourceTree = "<group>"; };
 		D6223FD22821A4630074F1AF /* EasyRandom.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = EasyRandom.hh; path = ../../EasyRandom.hh; sourceTree = "<group>"; };
-		D6223FD32821A4630074F1AF /* Checksum.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = Checksum.hh; path = ../../Checksum.hh; sourceTree = "<group>"; };
 		D6223FD42821A4640074F1AF /* rdfind.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = rdfind.cc; path = ../../rdfind.cc; sourceTree = "<group>"; };
-		D6223FD52821A4640074F1AF /* UndoableUnlink.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = UndoableUnlink.hh; path = ../../UndoableUnlink.hh; sourceTree = "<group>"; };
 		D6223FD62821A4640074F1AF /* Dirlist.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = Dirlist.hh; path = ../../Dirlist.hh; sourceTree = "<group>"; };
 		D6223FD72821A4640074F1AF /* RdfindDebug.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = RdfindDebug.hh; path = ../../RdfindDebug.hh; sourceTree = "<group>"; };
 		D6223FD82821A4640074F1AF /* Rdutil.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Rdutil.cc; path = ../../Rdutil.cc; sourceTree = "<group>"; };
 		D6223FD92821A4640074F1AF /* Cache.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Cache.cc; path = ../../Cache.cc; sourceTree = "<group>"; };
 		D68038F1281D864700646BE7 /* rdfind */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = rdfind; sourceTree = BUILT_PRODUCTS_DIR; };
 		D6803916281D884200646BE7 /* libz.tbd */ = {isa = PBXFileReference; lastKnownFileType = "sourcecode.text-based-dylib-definition"; name = libz.tbd; path = usr/lib/libz.tbd; sourceTree = SDKROOT; };
+		D68C79CE2827AFBC007C9AE5 /* Cluster.cpp */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Cluster.cpp; path = ../../Cluster.cpp; sourceTree = "<group>"; };
+		D68C79D02827B146007C9AE5 /* Cluster.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = Cluster.hh; path = ../../Cluster.hh; sourceTree = "<group>"; };
+		D68C79D12827CA4B007C9AE5 /* Tools.hh */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.h; name = Tools.hh; path = ../../Tools.hh; sourceTree = "<group>"; };
+		D68C79D22827CA4B007C9AE5 /* Tools.cc */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.cpp.cpp; name = Tools.cc; path = ../../Tools.cc; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -84,10 +84,12 @@
 		D68038F3281D864700646BE7 /* rdfind */ = {
 			isa = PBXGroup;
 			children = (
+				D68C79D22827CA4B007C9AE5 /* Tools.cc */,
+				D68C79D12827CA4B007C9AE5 /* Tools.hh */,
+				D68C79D02827B146007C9AE5 /* Cluster.hh */,
+				D68C79CE2827AFBC007C9AE5 /* Cluster.cpp */,
 				D6223FD92821A4640074F1AF /* Cache.cc */,
 				D6223FCE2821A4630074F1AF /* Cache.hh */,
-				D6223FCA2821A4630074F1AF /* Checksum.cc */,
-				D6223FD32821A4630074F1AF /* Checksum.hh */,
 				D6223FD12821A4630074F1AF /* CmdlineParser.cc */,
 				D6223FC92821A4630074F1AF /* CmdlineParser.hh */,
 				D6223FCC2821A4630074F1AF /* Dirlist.cc */,
@@ -100,8 +102,6 @@
 				D6223FD72821A4640074F1AF /* RdfindDebug.hh */,
 				D6223FD82821A4640074F1AF /* Rdutil.cc */,
 				D6223FD02821A4630074F1AF /* Rdutil.hh */,
-				D6223FCB2821A4630074F1AF /* UndoableUnlink.cc */,
-				D6223FD52821A4640074F1AF /* UndoableUnlink.hh */,
 			);
 			path = rdfind;
 			sourceTree = "<group>";
@@ -171,14 +171,14 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				D68C79D32827CA4B007C9AE5 /* Tools.cc in Sources */,
 				D6223FE22821A4640074F1AF /* Cache.cc in Sources */,
 				D6223FDE2821A4640074F1AF /* Fileinfo.cc in Sources */,
 				D6223FE12821A4640074F1AF /* Rdutil.cc in Sources */,
 				D6223FDD2821A4640074F1AF /* EasyRandom.cc in Sources */,
 				D6223FDC2821A4640074F1AF /* Dirlist.cc in Sources */,
-				D6223FDB2821A4640074F1AF /* UndoableUnlink.cc in Sources */,
 				D6223FE02821A4640074F1AF /* rdfind.cc in Sources */,
-				D6223FDA2821A4640074F1AF /* Checksum.cc in Sources */,
+				D68C79CF2827AFBC007C9AE5 /* Cluster.cpp in Sources */,
 				D6223FDF2821A4640074F1AF /* CmdlineParser.cc in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

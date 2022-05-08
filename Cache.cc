@@ -6,24 +6,26 @@
 //
 
 #include "Cache.hh"
-//#include <math.h>
 #include <nlohmann/json.hpp>
 #include <iostream>
 #include <fstream>
 #include <sstream>
+
+using namespace std;
+using namespace cv;
 
 using json = nlohmann::json;
 
 Cache::Cache() {
 }
 
-void Cache::load(const std::string& path) {
+void Cache::load(const string& path) {
   filePath = path;
 
-  std::ifstream file;
-  file.open(filePath.c_str(), std::ifstream::in);
+  ifstream file;
+  file.open(filePath.c_str(), ifstream::in);
   if (file.is_open()) {
-    std::stringstream buffer;
+    stringstream buffer;
     buffer << file.rdbuf();
 
     try {
@@ -32,32 +34,32 @@ void Cache::load(const std::string& path) {
           auto k = v.key();
           auto vObj = v.value();
           
-          cv::Mat aHash;
+          Mat aHash;
           if (vObj.contains("aHash")) {
             auto aHashArray = vObj["aHash"];
             if (aHashArray.is_array()) {
-              cv::Mat r(1, (int)aHashArray.size(), CV_8U);
+              Mat r(1, (int)aHashArray.size(), CV_8U);
               int c = 0;
               for (auto& x : aHashArray.items()) {
                 *r.ptr(0, c) = x.value().get<uchar>();
                 ++c;
               }
-              cv::vconcat(&r, 1, aHash);
+              vconcat(&r, 1, aHash);
             }
           }
           
-          cv::Mat pHash;
+          Mat pHash;
           if (vObj.contains("pHash")) {
             auto pHashArray = vObj["pHash"];
             // TODO: extract it into a function
             if (pHashArray.is_array()) {
-              cv::Mat r(1, (int)pHashArray.size(), CV_8U);
+              Mat r(1, (int)pHashArray.size(), CV_8U);
               int c = 0;
               for (auto& x : pHashArray.items()) {
                 *r.ptr(0, c) = x.value().get<uchar>();
                 ++c;
               }
-              cv::vconcat(&r, 1, pHash);
+              vconcat(&r, 1, pHash);
             }
           }
           
@@ -68,16 +70,16 @@ void Cache::load(const std::string& path) {
           
           map.insert({k, {aHash, pHash, isInvalidImage}});
         }
-        std::cout << "Loaded " << map.size() << " records from cache" << std::endl;
+        cout << "Loaded " << map.size() << " records from cache" << endl;
     } catch (...) {
-      std::cerr << "Couldn't load cache file " << path << std::endl;
+      cerr << "Couldn't load cache file " << path << endl;
     }
   }
   
   file.close();
 }
 
-void Cache::putAverageHash(const std::string& name, cv::Mat& averageHash) {
+void Cache::putAverageHash(const string& name, Mat& averageHash) {
   auto fileIterator = map.find(name);
   CacheEntry entry;
   if (fileIterator != map.end()) {
@@ -89,7 +91,7 @@ void Cache::putAverageHash(const std::string& name, cv::Mat& averageHash) {
   }
 }
 
-void Cache::putPHash(const std::string& name, cv::Mat& pHash) {
+void Cache::putPHash(const string& name, Mat& pHash) {
   auto fileIterator = map.find(name);
   if (fileIterator != map.end()) {
     fileIterator->second.pHash = pHash;
@@ -100,7 +102,7 @@ void Cache::putPHash(const std::string& name, cv::Mat& pHash) {
   }
 }
 
-void Cache::putIsInvalidImage(const std::string& name, bool isInvalidImage) {
+void Cache::putIsInvalidImage(const string& name, bool isInvalidImage) {
   auto fileIterator = map.find(name);
   if (fileIterator != map.end()) {
     fileIterator->second.isInvalidImage = isInvalidImage;
@@ -111,21 +113,21 @@ void Cache::putIsInvalidImage(const std::string& name, bool isInvalidImage) {
   }
 }
 
-void Cache::getAverageHash(const std::string& name, cv::Mat& averageHash) {
+void Cache::getAverageHash(const string& name, Mat& averageHash) {
   auto fileIterator = map.find(name);
   if (fileIterator != map.end()) {
     averageHash = fileIterator->second.averageHash;
   }
 }
 
-void Cache::getPHash(const std::string& name, cv::Mat& pHash) {
+void Cache::getPHash(const string& name, Mat& pHash) {
   auto fileIterator = map.find(name);
   if (fileIterator != map.end()) {
     pHash = fileIterator->second.pHash;
   }
 }
 
-bool Cache::isInvalidImage(const std::string& name) {
+bool Cache::isInvalidImage(const string& name) {
   auto fileIterator = map.find(name);
   if (fileIterator != map.end()) {
     return fileIterator->second.isInvalidImage;
@@ -134,17 +136,17 @@ bool Cache::isInvalidImage(const std::string& name) {
   }
 }
 
-void matFirstLineToJson(cv::Mat& mat, json& j) {
+void matFirstLineToJson(Mat& mat, json& j) {
     for (int i = 0; i < mat.cols; ++i) {
       j.push_back(mat.at<uchar>(0, i));
     }
 }
 
 void Cache::save() {
-  std::ofstream file;
-  file.open(filePath.c_str(), std::ios_base::out);
+  ofstream file;
+  file.open(filePath.c_str(), ios_base::out);
   if (!file.is_open()) {
-    std::cerr << "could not open cache file \"" << filePath << "\"\n";
+    cerr << "Could not open cache file \"" << filePath << "\"\n";
     return;
   }
   
