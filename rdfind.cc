@@ -28,7 +28,7 @@ using namespace std;
 // global variables
 
 // this vector holds the information about all files found
-vector<Fileinfo> filelist;
+vector<Ptr<Fileinfo>> filelist;
 struct Options;
 const Options* global_options{};
 
@@ -186,17 +186,17 @@ static int report(const string& path, const string& name, int depth) {
   // expand the name if the path is nonempty
   string expandedname = path.empty() ? name : (path + "/" + name);
 
-  Fileinfo tmp(move(expandedname), current_cmdline_index, depth, &cache);
-  if (tmp.readfileinfo()) {
-    if (tmp.isRegularFile()) {
-      const auto size = tmp.size();
+  Ptr<Fileinfo> tmp = make_shared<Fileinfo>(expandedname, current_cmdline_index, depth, &cache);
+  if (tmp.get()->readfileinfo()) {
+    if (tmp.get()->isRegularFile()) {
+      const auto size = tmp.get()->size();
       if (size >= global_options->minimumfilesize &&
           size < global_options->maximumfilesize) {
-        filelist.emplace_back(move(tmp));
+        filelist.emplace_back(tmp);
       }
     }
   } else {
-    cerr << "failed to read file info on file \"" << tmp.name() << '\n';
+    cerr << "failed to read file info on file \"" << tmp.get()->name() << '\n';
     return -1;
   }
   return 0;
@@ -277,7 +277,7 @@ int main(int narg, const char* argv[]) {
   << o.resultsfile << endl;
   gswd.printtofile(o.resultsfile);
   
-  gswd.calcClusterSortSuggestions();
+  //gswd.calcClusterSortSuggestions();
 
   return 0;
 }

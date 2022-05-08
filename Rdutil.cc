@@ -40,7 +40,7 @@ void Rdutil::sortClustersBySize() {
   );
 }
 
-int Rdutil::printtofile(const string& filename) const
+int Rdutil::printtofile(const string& filename)
 {
   // open a file to print to
   ofstream f1;
@@ -57,10 +57,14 @@ int Rdutil::printtofile(const string& filename) const
     output << "# Section (size:" << c.size() << ", distance:" << c.getDistance() << ')' << '\n';
     int n = 0;
     for (auto& f : c.filesSortedBySize()) {
-      output << n << ":" << f.size() << ' ' << f.name() << '\n';
+      output << n << ":" << f.get()->size() << ' ' << f.get()->name() << '\n';
       ++n;
     }
   }
+  
+  output << "\n\n### Sorting ###\n\n";
+  
+  calcClusterSortSuggestions(output);
 
   f1.close();
   return 0;
@@ -71,37 +75,37 @@ void Rdutil::markitems()
 {
   int64_t fileno = 1;
   for (auto& file : m_list) {
-    file.setidentity(fileno++);
+    file.get()->setidentity(fileno++);
   }
 }
 
 namespace {
 
-  bool cmpDeviceInode(const Fileinfo& a, const Fileinfo& b) {
-    return make_tuple(a.device(), a.inode()) <
-           make_tuple(b.device(), b.inode());
+  bool cmpDeviceInode(const Ptr<Fileinfo>& a, const Ptr<Fileinfo>& b) {
+    return make_tuple(a.get()->device(), a.get()->inode()) <
+           make_tuple(b.get()->device(), b.get()->inode());
   }
 
   // compares rank as described in RANKING on man page.
-  bool cmpRank(const Fileinfo& a, const Fileinfo& b) {
-    return make_tuple(a.get_cmdline_index(), a.depth(), a.getidentity()) <
-           make_tuple(b.get_cmdline_index(), b.depth(), b.getidentity());
+  bool cmpRank(const Ptr<Fileinfo>& a, const Ptr<Fileinfo>& b) {
+    return make_tuple(a.get()->get_cmdline_index(), a.get()->depth(), a.get()->getidentity()) <
+           make_tuple(b.get()->get_cmdline_index(), b.get()->depth(), b.get()->getidentity());
   }
 
-  bool cmpDepthName(const Fileinfo& a, const Fileinfo& b) {
+  bool cmpDepthName(const Ptr<Fileinfo>& a, const Ptr<Fileinfo>& b) {
     // inefficient, make it a reference.
-    return make_tuple(a.depth(), a.name()) <
-           make_tuple(b.depth(), b.name());
+    return make_tuple(a.get()->depth(), a.get()->name()) <
+           make_tuple(b.get()->depth(), b.get()->name());
   }
 
   // compares file size
-  bool cmpSize(const Fileinfo& a, const Fileinfo& b) {
-    return a.size() < b.size();
+  bool cmpSize(const Ptr<Fileinfo>& a, const Ptr<Fileinfo>& b) {
+    return a.get()->size() < b.get()->size();
   }
 
   // compares file size
-  bool cmpSizeReversed(const Fileinfo& a, const Fileinfo& b) {
-    return b.size() < a.size();
+  bool cmpSizeReversed(const Ptr<Fileinfo>& a, const Ptr<Fileinfo>& b) {
+    return b.get()->size() < a.get()->size();
   }
 
   /**
@@ -155,20 +159,20 @@ size_t Rdutil::removeIdenticalInodes() {
       // let the highest-ranking element not be deleted. do this in order, to be
       // cache friendly.
       auto best = min_element(first, last, cmpRank);
-      for_each(first, best, [&filesToRemove](Fileinfo& f) mutable {
-        filesToRemove.insert(f.getidentity());
+      for_each(first, best, [&filesToRemove](Ptr<Fileinfo>& f) mutable {
+        filesToRemove.insert(f.get()->getidentity());
       });
       
-      filesToRemove.erase(best->getidentity());
+      filesToRemove.erase(best->get()->getidentity());
       
-      for_each(best + 1, last, [&filesToRemove](Fileinfo& f) mutable {
-        filesToRemove.insert(f.getidentity());
+      for_each(best + 1, last, [&filesToRemove](Ptr<Fileinfo>& f) mutable {
+        filesToRemove.insert(f.get()->getidentity());
       });
     });
 
-  auto it = std::remove_if(
-    m_list.begin(), m_list.end(), [&filesToRemove](Fileinfo& f) {
-        return filesToRemove.find(f.getidentity()) != filesToRemove.end();
+  auto it = remove_if(
+    m_list.begin(), m_list.end(), [&filesToRemove](Ptr<Fileinfo>& f) {
+        return filesToRemove.find(f.get()->getidentity()) != filesToRemove.end();
     }
   );
     
@@ -179,9 +183,9 @@ size_t Rdutil::removeIdenticalInodes() {
 
 size_t Rdutil::removeNonImages() {
     auto initialSize = m_list.size();
-    auto it = std::remove_if(
-        m_list.begin(), m_list.end(), [](Fileinfo& f) {
-            return !f.isImage();
+    auto it = remove_if(
+        m_list.begin(), m_list.end(), [](Ptr<Fileinfo>& f) {
+            return !f.get()->isImage();
         }
     );
     
@@ -209,10 +213,10 @@ size_t Rdutil::removeInvalidImages() {
   return removeInvalidImages(m_list);
 }
 
-size_t Rdutil::removeInvalidImages(vector<Fileinfo>& files) {
+size_t Rdutil::removeInvalidImages(vector<Ptr<Fileinfo>>& files) {
   const auto size_before = files.size();
-  auto it = remove_if(files.begin(), files.end(), [](const Fileinfo& A) {
-    return A.isInvalidImage();
+  auto it = remove_if(files.begin(), files.end(), [](const Ptr<Fileinfo>& f) {
+    return f.get()->isInvalidImage();
   });
 
   files.erase(it, files.end());
@@ -226,7 +230,7 @@ Fileinfo::filesizetype Rdutil::totalsizeinbytes() const
 {
   Fileinfo::filesizetype totalsize = 0;
   for (const auto& elem : m_list) {
-    totalsize += elem.size();
+    totalsize += elem.get()->size();
   }
 
   return totalsize;
@@ -294,21 +298,21 @@ ostream& Rdutil::saveablespace(ostream& out) const {
 }
 
 class CalcHashesThread {
-    vector<Fileinfo>::iterator begin;
-    vector<Fileinfo>::iterator end;
+    vector<Ptr<Fileinfo>>::iterator begin;
+    vector<Ptr<Fileinfo>>::iterator end;
 
 public:
     CalcHashesThread(
-      vector<Fileinfo>::iterator b,
-      vector<Fileinfo>::iterator e
+      vector<Ptr<Fileinfo>>::iterator b,
+      vector<Ptr<Fileinfo>>::iterator e
     ) {
         begin = b;
         end = e;
     }
     
     void operator()(){
-        for_each(begin, end, [this](Fileinfo& f) {
-            f.calcHashes();
+        for_each(begin, end, [this](Ptr<Fileinfo>& f) {
+            f.get()->calcHashes();
         });
     }
 };
@@ -317,10 +321,10 @@ void Rdutil::calcHashes() {
   calcHashes(m_list);
 }
 
-void Rdutil::calcHashes(vector<Fileinfo>& files) {
+void Rdutil::calcHashes(vector<Ptr<Fileinfo>>& files) {
   auto threads = runInParallel(
     files,
-    [](vector<Fileinfo>::iterator begin, vector<Fileinfo>::iterator end) {
+    [](vector<Ptr<Fileinfo>>::iterator begin, vector<Ptr<Fileinfo>>::iterator end) {
       return CalcHashesThread(
          begin,
          end
@@ -353,7 +357,7 @@ void Rdutil::buildClusters() {
     } else {
       clusters.emplace_back(
         "",
-        vector<Fileinfo>({lf}),
+        vector<Ptr<Fileinfo>>({lf}),
         aHashPtr,
         pHashPtr,
         0.0
@@ -384,11 +388,11 @@ size_t Rdutil::clusterFileCount() {
 void Rdutil::buildPathClusters(const char* path, Dirlist& dirlist, Cache& cache) {
   Ptr<ImgHashBase> aHashPtr = AverageHash::create();
   Ptr<ImgHashBase> pHashPtr = PHash::create();
-  vector<Fileinfo> files;
+  vector<Ptr<Fileinfo>> files;
 
   dirlist.setcallbackfcn([this, &aHashPtr, &pHashPtr, &cache, &files](const string& path, const string& name, int depth) {
     string expandedname = path.empty() ? name : (path + "/" + name);
-    Fileinfo f = Fileinfo(move(expandedname), 0, depth, &cache);
+    Ptr<Fileinfo> f = make_shared<Fileinfo>(expandedname, 0, depth, &cache);
     files.push_back(f);
     
     auto entry = pathClusters.find(path);
@@ -397,7 +401,7 @@ void Rdutil::buildPathClusters(const char* path, Dirlist& dirlist, Cache& cache)
         path,
         Cluster(
           path,
-          vector<Fileinfo>({f}),
+          vector<Ptr<Fileinfo>>({f}),
           aHashPtr,
           pHashPtr,
           0.0
@@ -414,25 +418,38 @@ void Rdutil::buildPathClusters(const char* path, Dirlist& dirlist, Cache& cache)
   calcHashes(files);
 }
 
-void Rdutil::calcClusterSortSuggestions() {
+void Rdutil::calcClusterSortSuggestions(ostream& out) {
   for (auto& c : clusters) {
-    cout << "Sorting cluster(size:" << c.size() << ", distance:" << c.distance << "with:" << endl;
-    for (auto& f : c.files) { cout << "  " << f.name() << endl; }
+    out << "Sorting cluster(size:" << c.size() << ", distance:" << c.distance << " with:" << "\n";
+    for (auto& f : c.files) { out << "  " << f.get()->name() << endl; }
+    out << "to" << endl;
   
     for (auto& pathC : pathClusters) {
       double minDistance = numeric_limits<double>::max();
       double maxDistance = 0;
       for (auto& f : c.files) {
-        double d;
-        if (!f.isInvalidImage()) {
-          pathC.second.calcDistance(f, d);
+        
+        if (f.get()->isInvalidImage()) {
+          continue;
+        }
+//          pathC.second.calcDistance(f, d);
+
+        for (auto& cf : pathC.second.files) {
+          if (cf.get()->isInvalidImage()) {
+            continue;
+          }
+        
+          auto aDistance = c.getAHashPtr()->compare(f.get()->getAHash(), cf.get()->getAHash());
+          auto pDistance = c.getPHashPtr()->compare(f.get()->getPHash(), cf.get()->getPHash());
+        
+          double d = fmax(aDistance, pDistance);
           minDistance = fmin(minDistance, d);
           maxDistance = fmax(maxDistance, d);
         }
       }
       
-      cout << "Sorting cluster with:" << endl;
-      cout << " " << pathC.second.getName() << " min:" << minDistance << " max:" << maxDistance << endl;
+      out << " " << pathC.second.getName() << " min:" << minDistance << " max:" << maxDistance << "\n";
     }
+    out << "\n";
   }
 }

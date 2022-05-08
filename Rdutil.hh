@@ -22,7 +22,7 @@ using namespace std;
 class Rdutil
 {
 public:
-  explicit Rdutil(vector<Fileinfo>& list)
+  explicit Rdutil(vector<Ptr<Fileinfo>>& list)
     : m_list(list)
   {}
 
@@ -30,7 +30,7 @@ public:
    * print file names to a file, with extra information.
    * @return zero on success
    */
-  int printtofile(const string& filename) const;
+  int printtofile(const string& filename);
 
   /// mark files with a unique number
   void markitems();
@@ -65,13 +65,13 @@ public:
    */
   
   size_t removeInvalidImages();
-  size_t removeInvalidImages(vector<Fileinfo>& files);
+  size_t removeInvalidImages(vector<Ptr<Fileinfo>>& files);
 
   /// removes all items from the list, that have the deleteflag set to true.
   size_t cleanup();
   
   void calcHashes();
-  void calcHashes(vector<Fileinfo>& files);
+  void calcHashes(vector<Ptr<Fileinfo>>& files);
   
   long readyToCleanup();
   
@@ -99,10 +99,10 @@ public:
   size_t clusterFileCount();
   
   void buildPathClusters(const char* path, Dirlist& dirlist, Cache& cache);
-  void calcClusterSortSuggestions();
+  void calcClusterSortSuggestions(ostream& out);
 
 private:
-    vector<Fileinfo>& m_list;
+    vector<Ptr<Fileinfo>>& m_list;
     map<string, Cluster> pathClusters;
     vector<Cluster> clusters;
     

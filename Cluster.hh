@@ -20,7 +20,7 @@ using namespace cv::img_hash;
 
 struct Cluster {
   string name;
-  vector<Fileinfo> files;
+  vector<Ptr<Fileinfo>> files;
   Ptr<ImgHashBase> aHashPtr;
   Ptr<ImgHashBase> pHashPtr;
   double distance = 0.0;
@@ -28,7 +28,7 @@ struct Cluster {
 public:
     Cluster(
     string name,
-    vector<Fileinfo> files,
+    vector<Ptr<Fileinfo>> files,
     Ptr<ImgHashBase> aHashPtr,
     Ptr<ImgHashBase> pHashPtr,
     double d
@@ -40,12 +40,12 @@ public:
         , distance(d)
     {}
 
-  void calcDistance(Fileinfo& f, double& outDistance) const;
-  bool needAdd(Fileinfo& f, double& outDistance) const;
+  void calcDistance(Ptr<Fileinfo> f, double& outDistance) const;
+  bool needAdd(Ptr<Fileinfo> f, double& outDistance) const;
   
-  void add(Fileinfo& f);
+  void add(Ptr<Fileinfo> f);
   
-  std::vector<Fileinfo> filesSortedBySize() const;
+  vector<Ptr<Fileinfo>> filesSortedBySize() const;
   
   bool isSingle() const;
   
@@ -55,7 +55,7 @@ public:
   
   Fileinfo::filesizetype fileSizeWithoutBiggest() const;
   
-  const std::vector<Fileinfo>& getFiles() const {
+  const vector<Ptr<Fileinfo>>& getFiles() const {
     return files;
   }
   
@@ -70,6 +70,9 @@ public:
   const string& getName() const {
     return name;
   }
+  
+  Ptr<ImgHashBase> getAHashPtr() { return aHashPtr; }
+  Ptr<ImgHashBase> getPHashPtr() { return pHashPtr; }
 };
 
 #endif /* Cluster_hpp */
