@@ -27,8 +27,7 @@ using namespace std;
 using namespace cv;
 using namespace img_hash;
 
-static bool endsWith(string_view str, string_view suffix)
-{
+static bool endsWith(string_view str, string_view suffix) {
     return str.size() >= suffix.size() && 0 == str.compare(str.size()-suffix.size(), suffix.size(), suffix);
 }
 

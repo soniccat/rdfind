@@ -98,7 +98,7 @@ public:
   size_t removeSingleClusters();
   size_t clusterFileCount();
   
-  void buildPathClusters(const char* path, Dirlist& dirlist, Cache& cache);
+  void buildPathClusters(const char* path, const char* excludePath, Dirlist& dirlist, Cache& cache);
   void calcClusterSortSuggestions(ostream& out);
 
 private:

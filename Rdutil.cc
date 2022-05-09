@@ -40,8 +40,7 @@ void Rdutil::sortClustersBySize() {
   );
 }
 
-int Rdutil::printtofile(const string& filename)
-{
+int Rdutil::printtofile(const string& filename) {
   // open a file to print to
   ofstream f1;
   f1.open(filename.c_str(), ios_base::out);
@@ -61,18 +60,18 @@ int Rdutil::printtofile(const string& filename)
       ++n;
     }
   }
-  
-  output << "\n\n### Sorting ###\n\n";
-  
-  calcClusterSortSuggestions(output);
+
+  if (!pathClusters.empty()) {
+    output << "\n\n### Sorting ###\n\n";
+    calcClusterSortSuggestions(output);
+  }
 
   f1.close();
   return 0;
 }
 
 // mark files with a unique number
-void Rdutil::markitems()
-{
+void Rdutil::markitems() {
   int64_t fileno = 1;
   for (auto& file : m_list) {
     file.get()->setidentity(fileno++);
@@ -96,16 +95,6 @@ namespace {
     // inefficient, make it a reference.
     return make_tuple(a.get()->depth(), a.get()->name()) <
            make_tuple(b.get()->depth(), b.get()->name());
-  }
-
-  // compares file size
-  bool cmpSize(const Ptr<Fileinfo>& a, const Ptr<Fileinfo>& b) {
-    return a.get()->size() < b.get()->size();
-  }
-
-  // compares file size
-  bool cmpSizeReversed(const Ptr<Fileinfo>& a, const Ptr<Fileinfo>& b) {
-    return b.get()->size() < a.get()->size();
   }
 
   /**
@@ -385,30 +374,40 @@ size_t Rdutil::clusterFileCount() {
   return count;
 }
 
-void Rdutil::buildPathClusters(const char* path, Dirlist& dirlist, Cache& cache) {
+static bool startsWith(string_view str, string_view prefix) {
+    return str.size() >= prefix.size() && 0 == str.compare(0, prefix.size(), prefix);
+}
+
+void Rdutil::buildPathClusters(const char* path, const char* excludePath, Dirlist& dirlist, Cache& cache) {
   Ptr<ImgHashBase> aHashPtr = AverageHash::create();
   Ptr<ImgHashBase> pHashPtr = PHash::create();
   vector<Ptr<Fileinfo>> files;
 
-  dirlist.setcallbackfcn([this, &aHashPtr, &pHashPtr, &cache, &files](const string& path, const string& name, int depth) {
+  dirlist.setcallbackfcn([this, &excludePath, &aHashPtr, &pHashPtr, &cache, &files](const string& path, const string& name, int depth) {
+    if (startsWith(path.c_str(), excludePath)) {
+      return 0;
+    }
+  
     string expandedname = path.empty() ? name : (path + "/" + name);
     Ptr<Fileinfo> f = make_shared<Fileinfo>(expandedname, 0, depth, &cache);
-    files.push_back(f);
-    
-    auto entry = pathClusters.find(path);
-    if (entry == pathClusters.end()) {
-      pathClusters.emplace(
-        path,
-        Cluster(
+    if (f.get()->isImage()) {
+      files.push_back(f);
+      
+      auto entry = pathClusters.find(path);
+      if (entry == pathClusters.end()) {
+        pathClusters.emplace(
           path,
-          vector<Ptr<Fileinfo>>({f}),
-          aHashPtr,
-          pHashPtr,
-          0.0
-        )
-      );
-    } else {
-      entry->second.add(f);
+          Cluster(
+            path,
+            vector<Ptr<Fileinfo>>({f}),
+            aHashPtr,
+            pHashPtr,
+            0.0
+          )
+        );
+      } else {
+        entry->second.add(f);
+      }
     }
     
     return 0;
@@ -418,11 +417,38 @@ void Rdutil::buildPathClusters(const char* path, Dirlist& dirlist, Cache& cache)
   calcHashes(files);
 }
 
+struct ClusterDistance {
+  double minDistance;
+  double maxDistance;
+};
+
+struct ClusterSuggestions {
+  vector<pair<Cluster*, ClusterDistance>> clusters;
+  
+  void add(Cluster* cluster, double minDistance, double maxDistance) {
+    clusters.push_back(pair<Cluster*, ClusterDistance>(cluster, {minDistance, maxDistance}));
+  }
+  
+  vector<pair<Cluster*, ClusterDistance>>& keepTop(int count) {
+    sort(clusters.begin(), clusters.end(), [](const pair<Cluster*, ClusterDistance>& a, const pair<Cluster*, ClusterDistance>& b) {
+      return (a.second.minDistance < b.second.minDistance) ||
+        ((a.second.minDistance == b.second.minDistance) && a.second.maxDistance < b.second.maxDistance);
+    });
+
+    if (clusters.size() > count) {
+      clusters.resize(count);
+    }
+    return clusters;
+  }
+};
+
 void Rdutil::calcClusterSortSuggestions(ostream& out) {
   for (auto& c : clusters) {
     out << "Sorting cluster(size:" << c.size() << ", distance:" << c.distance << " with:" << "\n";
     for (auto& f : c.files) { out << "  " << f.get()->name() << endl; }
     out << "to" << endl;
+    
+    ClusterSuggestions suggestions;
   
     for (auto& pathC : pathClusters) {
       double minDistance = numeric_limits<double>::max();
@@ -432,7 +458,6 @@ void Rdutil::calcClusterSortSuggestions(ostream& out) {
         if (f.get()->isInvalidImage()) {
           continue;
         }
-//          pathC.second.calcDistance(f, d);
 
         for (auto& cf : pathC.second.files) {
           if (cf.get()->isInvalidImage()) {
@@ -446,10 +471,16 @@ void Rdutil::calcClusterSortSuggestions(ostream& out) {
           minDistance = fmin(minDistance, d);
           maxDistance = fmax(maxDistance, d);
         }
+        
+        suggestions.add(&pathC.second, minDistance, maxDistance);
       }
-      
-      out << " " << pathC.second.getName() << " min:" << minDistance << " max:" << maxDistance << "\n";
     }
+    
+    suggestions.keepTop(4);
+    for (auto& s : suggestions.clusters) {
+      out << " " << s.first->name << " min:" << s.second.minDistance << " max:" << s.second.maxDistance << "\n";
+    }
+    
     out << "\n";
   }
 }

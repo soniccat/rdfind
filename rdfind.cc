@@ -97,6 +97,7 @@ struct Options {
   string resultsfile = "rdfind_results.txt"; // results file name.
   string cachefile = ""; // cache file name.
   const char* clusterPath = ""; // path to folder-clusters
+  const char* excludeClusterPath = ""; // subpath to exclude from cluster path
 };
 
 Options parseOptions(Parser& parser) {
@@ -145,6 +146,8 @@ Options parseOptions(Parser& parser) {
       o.deterministic = parser.get_parsed_bool();
     } else if (parser.try_parse_string("-clusterpath")) {
       o.clusterPath = parser.get_parsed_string();
+    } else if (parser.try_parse_string("-excludeclusterpath")) {
+      o.excludeClusterPath = parser.get_parsed_string();
     } else if (parser.current_arg_is("-help") || parser.current_arg_is("-h") ||
                parser.current_arg_is("--help")) {
       usage();
@@ -220,9 +223,11 @@ int main(int narg, const char* argv[]) {
   // an object to do sorting and duplicate finding
   Rdutil gswd(filelist);
 
+  bool sortingMode = false;
   if (strlen(o.clusterPath) > 0) {
+    sortingMode = true;
     Dirlist dirlist(o.followsymlinks);
-    gswd.buildPathClusters(o.clusterPath, dirlist, cache);
+    gswd.buildPathClusters(o.clusterPath, o.excludeClusterPath, dirlist, cache);
   }
   
   loadListOfFiles(gswd, parser, o);
@@ -259,9 +264,11 @@ int main(int narg, const char* argv[]) {
   << gswd.getClusters().size()
   << " clusters " << endl;
   
-//  cout << "Excluded  "
-//  << gswd.removeSingleClusters()
-//  << " single clusters " << endl;
+  if (!sortingMode) {
+    cout << "Excluded  "
+    << gswd.removeSingleClusters()
+    << " single clusters " << endl;
+  }
   
   cout << gswd.clusterFileCount()
   << " files left" << endl;
