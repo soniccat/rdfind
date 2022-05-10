@@ -328,6 +328,8 @@
 					"-lopencv_img_hash",
 					"-lopencv_core",
 					"-lopencv_imgcodecs",
+					"-lopencv_ml",
+					"-lopencv_imgproc",
 				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
@@ -354,6 +356,8 @@
 					"-lopencv_img_hash",
 					"-lopencv_core",
 					"-lopencv_imgcodecs",
+					"-lopencv_ml",
+					"-lopencv_imgproc",
 				);
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};

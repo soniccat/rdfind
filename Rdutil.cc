@@ -30,6 +30,7 @@
 using namespace std;
 using namespace cv;
 using namespace cv::img_hash;
+using namespace cv::ml;
 
 void Rdutil::sortClustersBySize() {
   sort(clusters.begin(), clusters.end(), [](const Cluster& c1, const Cluster& c2) {
@@ -63,7 +64,9 @@ int Rdutil::printtofile(const string& filename) {
 
   if (!pathClusters.empty()) {
     output << "\n\n### Sorting ###\n\n";
-    calcClusterSortSuggestions(output);
+    //calcClusterSortSuggestions(output);
+    
+    buildTrainData(output);
   }
 
   f1.close();
@@ -374,7 +377,7 @@ size_t Rdutil::clusterFileCount() {
   return count;
 }
 
-static bool startsWith(string_view str, string_view prefix) {
+static bool startsWith(const string_view& str, const string_view& prefix) {
     return str.size() >= prefix.size() && 0 == str.compare(0, prefix.size(), prefix);
 }
 
@@ -382,9 +385,10 @@ void Rdutil::buildPathClusters(const char* path, const char* excludePath, Dirlis
   Ptr<ImgHashBase> aHashPtr = AverageHash::create();
   Ptr<ImgHashBase> pHashPtr = PHash::create();
   vector<Ptr<Fileinfo>> files;
+  string excludePathString(excludePath);
 
-  dirlist.setcallbackfcn([this, &excludePath, &aHashPtr, &pHashPtr, &cache, &files](const string& path, const string& name, int depth) {
-    if (startsWith(path.c_str(), excludePath)) {
+  dirlist.setcallbackfcn([this, &excludePathString, &aHashPtr, &pHashPtr, &cache, &files](const string& path, const string& name, int depth) {
+    if (excludePathString.length() > 0 && startsWith(path, excludePathString)) {
       return 0;
     }
   
@@ -415,6 +419,124 @@ void Rdutil::buildPathClusters(const char* path, const char* excludePath, Dirlis
 
   dirlist.walk(string(path));
   calcHashes(files);
+}
+
+const int WIDTH_SIZE = 50;
+const int HEIGHT_SIZE = 50;
+
+bool loadMLImage(const string& imagePath, Mat& outputImage) {
+    // load image in grayscale
+    Mat image = imread(imagePath, IMREAD_GRAYSCALE);
+    Mat temp;
+
+    // check for invalid input
+    if (image.empty()) {
+        cout << "Could not open or find the image: " << imagePath << std::endl;
+        return false;
+    }
+
+    // resize the image
+    Size size(WIDTH_SIZE, HEIGHT_SIZE);
+    resize(image, temp, size, 0, 0, InterpolationFlags::INTER_AREA);
+
+    // convert to float 1-channel
+    temp.convertTo(outputImage, CV_32F, 1.0/255.0);
+    return true;
+}
+
+bool exists(const char *fileName) {
+    std::ifstream infile(fileName);
+    return infile.good();
+}
+
+void Rdutil::buildTrainData(ostream& out) {
+  Mat inputTrainingData;
+  Mat outputTrainingData;
+  
+  int ci = 0;
+  out << "Clusters:" << '\n';
+  for (auto& cl : pathClusters) { out << ci++ << ": " << cl.first << '\n'; }
+  out << '\n';
+  
+  int i = 0;
+  for (auto& cl : pathClusters) {
+    for (auto& f : cl.second.files) {
+      Mat im;
+      if (!f.get()->isInvalidImage() && loadMLImage(f.get()->name(), im)) {
+        Mat signImageDataInOneRow = im.reshape(0, 1);
+        inputTrainingData.push_back(signImageDataInOneRow);
+        
+        vector<float> outputTraningVector(pathClusters.size());
+        fill(outputTraningVector.begin(), outputTraningVector.end(), -1.0);
+        outputTraningVector[i] = 1.0;
+        
+        Mat outputMat(outputTraningVector, false);
+        outputTrainingData.push_back(outputMat.reshape(0, 1));
+      }
+    }
+    
+    ++i;
+  }
+  
+  Ptr<TrainData> trainingData = TrainData::create(
+        inputTrainingData,
+        SampleTypes::ROW_SAMPLE,
+        outputTrainingData
+    );
+
+  Ptr<ANN_MLP> mlp;// = ANN_MLP::create();
+  const char* mlpPath = "./mlpfile";
+  if (exists(mlpPath)) {
+    mlp = ANN_MLP::load(mlpPath);
+    //mlp->load("./mlpfile");
+  } else {
+    mlp = ANN_MLP::create();
+    Mat layersSize = Mat(3, 1, CV_16U);
+    layersSize.row(0) = Scalar(inputTrainingData.cols);
+    layersSize.row(1) = Scalar(2*pathClusters.size());
+    layersSize.row(2) = Scalar(outputTrainingData.cols);
+    
+    mlp->setLayerSizes(layersSize);
+    mlp->setActivationFunction(ANN_MLP::ActivationFunctions::SIGMOID_SYM, 1.0, 1.0);
+    mlp->setTrainMethod(ANN_MLP::TrainingMethods::BACKPROP, 0.1, 0.1);
+    //mlp->setTrainMethod(ANN_MLP::TrainingMethods::RPROP);
+
+    TermCriteria termCrit = TermCriteria(
+        TermCriteria::Type::MAX_ITER //| TermCriteria::Type::EPS,
+        ,100 //(int) INT_MAX
+        ,0.000001
+    );
+    mlp->setTermCriteria(termCrit);
+    
+    auto start = std::chrono::system_clock::now();
+    mlp->train(trainingData,
+        0//ANN_MLP::TrainFlags::UPDATE_WEIGHTS
+        //, ANN_MLP::TrainFlags::NO_INPUT_SCALE
+        //+ ANN_MLP::TrainFlags::NO_OUTPUT_SCALE
+    );
+    auto duration = duration_cast<std::chrono::milliseconds> (std::chrono::system_clock::now() - start);
+    cout << "Training time: " << duration.count() << "ms" << endl;
+    cout << "Layer sizes " << mlp->getLayerSizes() << endl;
+  //  cout << "L0: " << mlp->getWeights(0).size << " " << mlp->getWeights(0) << endl;
+  //  cout << "L1: " << mlp->getWeights(1).size << " " << mlp->getWeights(1) << endl;
+  //  cout << "L2: " << mlp->getWeights(2).size << " " << mlp->getWeights(2) << endl;
+
+    mlp->save("./mlpfile");
+  }
+
+  for (auto& f : m_list) {
+    Mat img;
+    Mat result;
+    //mlp->predict(inputTrainingData.row(i), result);
+    if (loadMLImage(f.get()->name(), img)) {
+      out << f.get()->name() << '\n';
+      mlp->predict(img.reshape(0, 1), result);
+      //out << result << endl;
+      for (int c=0; c<result.cols; ++c) {
+        out << c << ": " << result.col(c) << '\n';
+      }
+    }
+  }
 }
 
 struct ClusterDistance {
@@ -464,10 +586,10 @@ void Rdutil::calcClusterSortSuggestions(ostream& out) {
             continue;
           }
         
-          auto aDistance = c.getAHashPtr()->compare(f.get()->getAHash(), cf.get()->getAHash());
+          //auto aDistance = c.getAHashPtr()->compare(f.get()->getAHash(), cf.get()->getAHash());
           auto pDistance = c.getPHashPtr()->compare(f.get()->getPHash(), cf.get()->getPHash());
         
-          double d = fmax(aDistance, pDistance);
+          double d = pDistance; //fmax(aDistance, pDistance);
           minDistance = fmin(minDistance, d);
           maxDistance = fmax(maxDistance, d);
         }

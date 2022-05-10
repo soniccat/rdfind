@@ -12,6 +12,7 @@
 #include <vector>
 #include <opencv2/opencv.hpp>
 #include <opencv2/img_hash.hpp>
+#include <opencv2/ml/ml.hpp>
 
 #include "Fileinfo.hh" //file container
 #include "Cluster.hh"
@@ -100,6 +101,7 @@ public:
   
   void buildPathClusters(const char* path, const char* excludePath, Dirlist& dirlist, Cache& cache);
   void calcClusterSortSuggestions(ostream& out);
+  void buildTrainData(ostream& out);
 
 private:
     vector<Ptr<Fileinfo>>& m_list;
