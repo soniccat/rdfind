@@ -421,12 +421,12 @@ void Rdutil::buildPathClusters(const char* path, const char* excludePath, Dirlis
   calcHashes(files);
 }
 
-const int WIDTH_SIZE = 50;
-const int HEIGHT_SIZE = 50;
+const int WIDTH_SIZE = 8;
+const int HEIGHT_SIZE = 8;
 
 bool loadMLImage(const string& imagePath, Mat& outputImage) {
     // load image in grayscale
-    Mat image = imread(imagePath, IMREAD_GRAYSCALE);
+    Mat image = imread(imagePath, IMREAD_COLOR);
     Mat temp;
 
     // check for invalid input
@@ -439,8 +439,12 @@ bool loadMLImage(const string& imagePath, Mat& outputImage) {
     Size size(WIDTH_SIZE, HEIGHT_SIZE);
     resize(image, temp, size, 0, 0, InterpolationFlags::INTER_AREA);
 
+    temp /= 10;
     // convert to float 1-channel
-    temp.convertTo(outputImage, CV_32F, 1.0/255.0);
+     //cout << temp.row(0) << endl;//.at<uchar>(0) << " " << temp.row(0).at<uchar>(0) << endl;
+    temp.convertTo(outputImage, CV_32FC3, 1.0/25.0);
+     //cout << outputImage.row(0) << endl;//.at<float>(0) << " " << outputImage.row(0).at<float>(0) << endl;
+    //cout << "temp.type(): " << temp.type() << " " << CV_8UC3 << " outputImage.type(): " << outputImage.type() << " " << CV_32FC3 << endl;
     return true;
 }
 
@@ -463,7 +467,8 @@ void Rdutil::buildTrainData(ostream& out) {
     for (auto& f : cl.second.files) {
       Mat im;
       if (!f.get()->isInvalidImage() && loadMLImage(f.get()->name(), im)) {
-        Mat signImageDataInOneRow = im.reshape(0, 1);
+        Mat signImageDataInOneRow = im.reshape(1, 1);
+        //cout << "signImageDataInOneRow.type(): " << signImageDataInOneRow.type() << endl;
         inputTrainingData.push_back(signImageDataInOneRow);
         
         vector<float> outputTraningVector(pathClusters.size());
@@ -498,24 +503,24 @@ void Rdutil::buildTrainData(ostream& out) {
     
     mlp->setLayerSizes(layersSize);
     mlp->setActivationFunction(ANN_MLP::ActivationFunctions::SIGMOID_SYM, 1.0, 1.0);
-    mlp->setTrainMethod(ANN_MLP::TrainingMethods::BACKPROP, 0.1, 0.1);
+    mlp->setTrainMethod(ANN_MLP::TrainingMethods::BACKPROP, 0.0001);
     //mlp->setTrainMethod(ANN_MLP::TrainingMethods::RPROP);
 
     TermCriteria termCrit = TermCriteria(
         TermCriteria::Type::MAX_ITER //| TermCriteria::Type::EPS,
-        ,100 //(int) INT_MAX
+        ,10 //(int) INT_MAX
         ,0.000001
     );
     mlp->setTermCriteria(termCrit);
     
-    auto start = std::chrono::system_clock::now();
+    //auto start = std::chrono::system_clock::now();
     mlp->train(trainingData,
         0//ANN_MLP::TrainFlags::UPDATE_WEIGHTS
         //, ANN_MLP::TrainFlags::NO_INPUT_SCALE
         //+ ANN_MLP::TrainFlags::NO_OUTPUT_SCALE
     );
-    auto duration = duration_cast<std::chrono::milliseconds> (std::chrono::system_clock::now() - start);
-    cout << "Training time: " << duration.count() << "ms" << endl;
+    //auto duration = duration_cast<std::chrono::milliseconds> (std::chrono::system_clock::now() - start);
+    //cout << "Training time: " << duration.count() << "ms" << endl;
     cout << "Layer sizes " << mlp->getLayerSizes() << endl;
   //  cout << "L0: " << mlp->getWeights(0).size << " " << mlp->getWeights(0) << endl;
   //  cout << "L1: " << mlp->getWeights(1).size << " " << mlp->getWeights(1) << endl;
@@ -530,7 +535,7 @@ void Rdutil::buildTrainData(ostream& out) {
     //mlp->predict(inputTrainingData.row(i), result);
     if (loadMLImage(f.get()->name(), img)) {
       out << f.get()->name() << '\n';
-      mlp->predict(img.reshape(0, 1), result);
+      mlp->predict(img.reshape(1, 1), result);
       //out << result << endl;
       for (int c=0; c<result.cols; ++c) {
         out << c << ": " << result.col(c) << '\n';
