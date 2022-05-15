@@ -421,8 +421,8 @@ void Rdutil::buildPathClusters(const char* path, const char* excludePath, Dirlis
   calcHashes(files);
 }
 
-const int WIDTH_SIZE = 8;
-const int HEIGHT_SIZE = 8;
+const int WIDTH_SIZE = 50;
+const int HEIGHT_SIZE = 50;
 
 bool loadMLImage(const string& imagePath, Mat& outputImage) {
     // load image in grayscale
@@ -503,13 +503,13 @@ void Rdutil::buildTrainData(ostream& out) {
     
     mlp->setLayerSizes(layersSize);
     mlp->setActivationFunction(ANN_MLP::ActivationFunctions::SIGMOID_SYM, 1.0, 1.0);
-    mlp->setTrainMethod(ANN_MLP::TrainingMethods::BACKPROP, 0.0001);
+    mlp->setTrainMethod(ANN_MLP::TrainingMethods::BACKPROP, 0.01);
     //mlp->setTrainMethod(ANN_MLP::TrainingMethods::RPROP);
 
     TermCriteria termCrit = TermCriteria(
         TermCriteria::Type::MAX_ITER //| TermCriteria::Type::EPS,
-        ,10 //(int) INT_MAX
-        ,0.000001
+        ,1000000 //(int) INT_MAX
+        ,0.01
     );
     mlp->setTermCriteria(termCrit);
     
@@ -526,7 +526,7 @@ void Rdutil::buildTrainData(ostream& out) {
   //  cout << "L1: " << mlp->getWeights(1).size << " " << mlp->getWeights(1) << endl;
   //  cout << "L2: " << mlp->getWeights(2).size << " " << mlp->getWeights(2) << endl;
 
-    mlp->save("./mlpfile");
+    //mlp->save("./mlpfile");
   }
 
   for (auto& f : m_list) {

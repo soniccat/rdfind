@@ -24,6 +24,7 @@ void Cache::load(const string& path) {
 
   ifstream file;
   file.open(filePath.c_str(), ifstream::in);
+  file.open(filePath.c_str(), ifstream::in);
   if (file.is_open()) {
     stringstream buffer;
     buffer << file.rdbuf();
