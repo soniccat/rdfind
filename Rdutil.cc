@@ -425,27 +425,120 @@ const int WIDTH_SIZE = 50;
 const int HEIGHT_SIZE = 50;
 
 bool loadMLImage(const string& imagePath, Mat& outputImage) {
-    // load image in grayscale
-    Mat image = imread(imagePath, IMREAD_COLOR);
-    Mat temp;
+  // load image in grayscale
+  Mat image = imread(imagePath, IMREAD_COLOR);
+  Mat temp;
+  
+//  cout << imagePath << endl;
+  
+  ///
+  //cv::Matsource_img=cv::imread("detect.bmp",1); // Read image from path
 
-    // check for invalid input
-    if (image.empty()) {
-        cout << "Could not open or find the image: " << imagePath << std::endl;
-        return false;
+  // Serialize, float
+  Mat data = image.reshape(1, image.total());
+  data.convertTo(data, CV_32F);
+
+  // Perform k-Means
+  int k = 3;
+  vector<int> labels;
+  Mat3f centers;
+  kmeans(data, k, labels, cv::TermCriteria(
+        TermCriteria::Type::MAX_ITER //| TermCriteria::Type::EPS,
+        ,100 //(int) INT_MAX
+        ,1.0),
+        1, cv::KMEANS_PP_CENTERS, centers);
+
+  // Make a poster! (Clustering)
+//  for (int i = 0; i < (int)labels.size(); ++i) {
+//      data.at<float>(i, 0) = centers.at<float>(labels[i], 0);
+//      data.at<float>(i, 1) = centers.at<float>(labels[i], 1);
+//      data.at<float>(i, 2) = centers.at<float>(labels[i], 2);
+//     // qDebug()<<labels.size();
+//  }
+
+  int labelCount[k];
+  memset(labelCount, 0, sizeof(labelCount));
+  for (int i = 0; i < (int)labels.size(); ++i) {
+    labelCount[labels[i]]++;
+  }
+
+  // Un-Serialize, un-float
+  cv::Mat destination = data.reshape(3, image.rows);
+  destination.convertTo(image, CV_8UC3);
+  
+//  for (int i = 0; i < k; ++i) {
+//    cout << labelCount[i] << " ";
+//  }
+//  cout << endl;
+//  cout << centers << endl;
+//  for (int i = 0; i < centers.rows; ++i) {
+//    cout << (int)centers.at<float>(i, 0) << " ";
+//    cout << (int)centers.at<float>(i, 1) << " ";
+//    cout << (int)centers.at<float>(i, 2) << " ";
+//    cout << endl;
+//  }
+
+  vector<pair<int, Vec3f>> coutToColor;
+  for (int i = 0; i < k; ++i) {
+    auto v = Vec3f((int)centers.at<float>(i, 0)/10, (int)centers.at<float>(i, 1)/10, (int)centers.at<float>(i, 2)/10);
+    coutToColor.push_back(
+      pair<int, Vec3f>(
+        labelCount[i],
+        v / 25.0f
+      )
+    );
+  }
+  
+  std::sort(coutToColor.begin(), coutToColor.end(), [](const pair<int, Vec3f>& a, const pair<int, Vec3f>& b) {
+      return a.first > b.first;
     }
+  );
 
-    // resize the image
-    Size size(WIDTH_SIZE, HEIGHT_SIZE);
-    resize(image, temp, size, 0, 0, InterpolationFlags::INTER_AREA);
+  //cout << coutToColor << endl;
 
-    temp /= 10;
-    // convert to float 1-channel
-     //cout << temp.row(0) << endl;//.at<uchar>(0) << " " << temp.row(0).at<uchar>(0) << endl;
-    temp.convertTo(outputImage, CV_32FC3, 1.0/25.0);
-     //cout << outputImage.row(0) << endl;//.at<float>(0) << " " << outputImage.row(0).at<float>(0) << endl;
-    //cout << "temp.type(): " << temp.type() << " " << CV_8UC3 << " outputImage.type(): " << outputImage.type() << " " << CV_32FC3 << endl;
-    return true;
+  // Paint!
+  //QLabel *palette[6] = {ui->b_1, ui->b_2, ui->b_3, ui->b_4, ui->b_5, ui->b_6};
+  const int p = 0; // Offset
+  //centers.convertTo(outputImage, CV_32FC3);
+  outputImage.create(0, 1, CV_32FC3);
+  std::for_each(coutToColor.begin(), coutToColor.end(), [&outputImage](const pair<int, Vec3f>& a) {
+    outputImage.push_back(a.second);
+    //outputImage.push_back(a.second[1]);
+    //outputImage.push_back(a.second[2]);
+  });
+  
+  cout << imagePath << endl;
+  cout << outputImage << endl;
+  
+//  for(int i = 0; i < 3; ++i) {
+//      //std::stringstream back_clr;
+//      //back_clr << centers.at<float>(i + p, 2) << "," << centers.at<float>(i + p, 1) << "," << centers.at<float>(i + p, 0);
+//      //palette[i]->setStyleSheet(QString::fromStdString("background-color:rgb(" + back_clr.str() + ");"));
+//      //qInfo()<< QString::fromStdString(back_clr.str() );
+//      //cout << back_clr.str() << endl;
+//
+//      //outputImage.push_back(centers.at<float>(i + p, 2));
+//  }
+  
+  ///
+
+//  // check for invalid input
+//  if (image.empty()) {
+//      cout << "Could not open or find the image: " << imagePath << std::endl;
+//      return false;
+//  }
+//
+//  // resize the image
+//  Size size(WIDTH_SIZE, HEIGHT_SIZE);
+//  resize(image, temp, size, 0, 0, InterpolationFlags::INTER_AREA);
+//
+//  temp /= 10;
+//  // convert to float 1-channel
+//   //cout << temp.row(0) << endl;//.at<uchar>(0) << " " << temp.row(0).at<uchar>(0) << endl;
+//  temp.convertTo(outputImage, CV_32FC3, 1.0/25.0);
+//   //cout << outputImage.row(0) << endl;//.at<float>(0) << " " << outputImage.row(0).at<float>(0) << endl;
+//  //cout << "temp.type(): " << temp.type() << " " << CV_8UC3 << " outputImage.type(): " << outputImage.type() << " " << CV_32FC3 << endl;
+  return true;
 }
 
 bool exists(const char *fileName) {
@@ -464,6 +557,7 @@ void Rdutil::buildTrainData(ostream& out) {
   
   int i = 0;
   for (auto& cl : pathClusters) {
+    cout << "Cluster " << cl.first << endl;
     for (auto& f : cl.second.files) {
       Mat im;
       if (!f.get()->isInvalidImage() && loadMLImage(f.get()->name(), im)) {
@@ -533,6 +627,7 @@ void Rdutil::buildTrainData(ostream& out) {
     Mat img;
     Mat result;
     //mlp->predict(inputTrainingData.row(i), result);
+    cout << "Predict for " << f.get()->name() << endl;
     if (loadMLImage(f.get()->name(), img)) {
       out << f.get()->name() << '\n';
       mlp->predict(img.reshape(1, 1), result);
