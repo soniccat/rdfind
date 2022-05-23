@@ -421,32 +421,82 @@ void Rdutil::buildPathClusters(const char* path, const char* excludePath, Dirlis
   calcHashes(files);
 }
 
-const int WIDTH_SIZE = 50;
-const int HEIGHT_SIZE = 50;
+//const int WIDTH_SIZE = 50;
+//const int HEIGHT_SIZE = 50;
+
+struct Color {
+  uchar r, g, b;
+  
+  bool operator() (const Color& lhs, const Color& rhs) const {
+       return (lhs.r < rhs.r) || (lhs.r < rhs.r && lhs.g < rhs.g) || (lhs.r < rhs.r && lhs.g < rhs.g && lhs.b < rhs.b);
+   }
+};
+
+// Color colors[10*10*10];
 
 bool loadMLImage(const string& imagePath, Mat& outputImage) {
   // load image in grayscale
   Mat image = imread(imagePath, IMREAD_COLOR);
   Mat temp;
+  map<Color, int, Color> colors;
   
+  int colorCount = image.rows * image.cols;
+  Color sharedColor = {0, 0, 0};
+  
+  for (int r = 0; r < image.rows; ++r) {
+    for (int c = 0; c < image.cols; ++c) {
+      Vec3b& colorVec = image.at<Vec3b>();
+      float divider = 100.0f/2550.0f;
+      sharedColor.r = colorVec[0] * divider;
+      sharedColor.g = colorVec[1] * divider;
+      sharedColor.b = colorVec[2] * divider;
+      
+      auto colorIterator = colors.find(sharedColor);
+      if (colorIterator == colors.end()) {
+        colors[sharedColor] = 1;
+      } else {
+        colorIterator->second += 1;
+      }
+    }
+  }
+  
+  //memset(colors, 0, sizeof(colors));
 //  cout << imagePath << endl;
   
   ///
   //cv::Matsource_img=cv::imread("detect.bmp",1); // Read image from path
 
   // Serialize, float
-  Mat data = image.reshape(1, image.total());
-  data.convertTo(data, CV_32F);
+  outputImage.create(0, 1, CV_32F);
+  outputImage.reserve(1000);
+  
+  for (uchar r = 0; r < 10; ++r) {
+    for (uchar g = 0; g < 10; ++g) {
+      for (uchar b = 0; b < 10; ++b) {
+        sharedColor = {r, g, b};
+        auto colorIterator = colors.find(sharedColor);
+        if (colorIterator != colors.end()) {
+          int count = colorIterator->second;
+          outputImage.push_back((float)count);
+        } else {
+          outputImage.push_back(0.0f);
+        }
+      }
+    }
+  }
+  
+  
+//  data.convertTo(data, CV_32F);
 
   // Perform k-Means
-  int k = 3;
-  vector<int> labels;
-  Mat3f centers;
-  kmeans(data, k, labels, cv::TermCriteria(
-        TermCriteria::Type::MAX_ITER //| TermCriteria::Type::EPS,
-        ,100 //(int) INT_MAX
-        ,1.0),
-        1, cv::KMEANS_PP_CENTERS, centers);
+//  int k = 3;
+//  vector<int> labels;
+//  Mat3f centers;
+//  kmeans(data, k, labels, cv::TermCriteria(
+//        TermCriteria::Type::MAX_ITER //| TermCriteria::Type::EPS,
+//        ,100 //(int) INT_MAX
+//        ,1.0),
+//        1, cv::KMEANS_PP_CENTERS, centers);
 
   // Make a poster! (Clustering)
 //  for (int i = 0; i < (int)labels.size(); ++i) {
@@ -456,15 +506,15 @@ bool loadMLImage(const string& imagePath, Mat& outputImage) {
 //     // qDebug()<<labels.size();
 //  }
 
-  int labelCount[k];
-  memset(labelCount, 0, sizeof(labelCount));
-  for (int i = 0; i < (int)labels.size(); ++i) {
-    labelCount[labels[i]]++;
-  }
+//  int labelCount[k];
+//  memset(labelCount, 0, sizeof(labelCount));
+//  for (int i = 0; i < (int)labels.size(); ++i) {
+//    labelCount[labels[i]]++;
+//  }
 
   // Un-Serialize, un-float
-  cv::Mat destination = data.reshape(3, image.rows);
-  destination.convertTo(image, CV_8UC3);
+//  cv::Mat destination = data.reshape(3, image.rows);
+//  destination.convertTo(image, CV_8UC3);
   
 //  for (int i = 0; i < k; ++i) {
 //    cout << labelCount[i] << " ";
@@ -477,38 +527,38 @@ bool loadMLImage(const string& imagePath, Mat& outputImage) {
 //    cout << (int)centers.at<float>(i, 2) << " ";
 //    cout << endl;
 //  }
-
-  vector<pair<int, Vec3f>> coutToColor;
-  for (int i = 0; i < k; ++i) {
-    auto v = Vec3f((int)centers.at<float>(i, 0)/10, (int)centers.at<float>(i, 1)/10, (int)centers.at<float>(i, 2)/10);
-    coutToColor.push_back(
-      pair<int, Vec3f>(
-        labelCount[i],
-        v / 25.0f
-      )
-    );
-  }
+//
+//  vector<pair<int, Vec3f>> coutToColor;
+//  for (int i = 0; i < k; ++i) {
+//    auto v = Vec3f((int)centers.at<float>(i, 0)/10, (int)centers.at<float>(i, 1)/10, (int)centers.at<float>(i, 2)/10);
+//    coutToColor.push_back(
+//      pair<int, Vec3f>(
+//        labelCount[i],
+//        v / 25.0f
+//      )
+//    );
+//  }
   
-  std::sort(coutToColor.begin(), coutToColor.end(), [](const pair<int, Vec3f>& a, const pair<int, Vec3f>& b) {
-      return a.first > b.first;
-    }
-  );
+//  std::sort(coutToColor.begin(), coutToColor.end(), [](const pair<int, Vec3f>& a, const pair<int, Vec3f>& b) {
+//      return a.first > b.first;
+//    }
+//  );
 
   //cout << coutToColor << endl;
 
-  // Paint!
-  //QLabel *palette[6] = {ui->b_1, ui->b_2, ui->b_3, ui->b_4, ui->b_5, ui->b_6};
-  const int p = 0; // Offset
-  //centers.convertTo(outputImage, CV_32FC3);
-  outputImage.create(0, 1, CV_32FC3);
-  std::for_each(coutToColor.begin(), coutToColor.end(), [&outputImage](const pair<int, Vec3f>& a) {
-    outputImage.push_back(a.second);
-    //outputImage.push_back(a.second[1]);
-    //outputImage.push_back(a.second[2]);
-  });
+//  // Paint!
+//  //QLabel *palette[6] = {ui->b_1, ui->b_2, ui->b_3, ui->b_4, ui->b_5, ui->b_6};
+//  const int p = 0; // Offset
+//  //centers.convertTo(outputImage, CV_32FC3);
+//  outputImage.create(0, 1, CV_32FC3);
+//  std::for_each(coutToColor.begin(), coutToColor.end(), [&outputImage](const pair<int, Vec3f>& a) {
+//    outputImage.push_back(a.second);
+//    //outputImage.push_back(a.second[1]);
+//    //outputImage.push_back(a.second[2]);
+//  });
   
-  cout << imagePath << endl;
-  cout << outputImage << endl;
+//  cout << imagePath << endl;
+//  cout << outputImage << endl;
   
 //  for(int i = 0; i < 3; ++i) {
 //      //std::stringstream back_clr;
@@ -546,93 +596,129 @@ bool exists(const char *fileName) {
     return infile.good();
 }
 
+Mat shuffleRows(const Mat &matrix)
+{
+  vector <int> seeds;
+  for (int cont = 0; cont < matrix.rows; cont++)
+    seeds.push_back(cont);
+
+  randShuffle(seeds);
+
+  Mat output;
+  for (int cont = 0; cont < matrix.rows; cont++)
+    output.push_back(matrix.row(seeds[cont]));
+
+  return output;
+}
+
 void Rdutil::buildTrainData(ostream& out) {
-  Mat inputTrainingData;
-  Mat outputTrainingData;
+  Ptr<ANN_MLP> mlp;
+//  const char* mlpPath = "./mlpfile";
+//  if (exists(mlpPath)) {
+//    mlp = ANN_MLP::load(mlpPath);
+//
+//  } else {
+    // load training data
   
-  int ci = 0;
-  out << "Clusters:" << '\n';
-  for (auto& cl : pathClusters) { out << ci++ << ": " << cl.first << '\n'; }
-  out << '\n';
-  
-  int i = 0;
-  for (auto& cl : pathClusters) {
-    cout << "Cluster " << cl.first << endl;
-    for (auto& f : cl.second.files) {
-      Mat im;
-      if (!f.get()->isInvalidImage() && loadMLImage(f.get()->name(), im)) {
-        Mat signImageDataInOneRow = im.reshape(1, 1);
-        //cout << "signImageDataInOneRow.type(): " << signImageDataInOneRow.type() << endl;
-        inputTrainingData.push_back(signImageDataInOneRow);
-        
-        vector<float> outputTraningVector(pathClusters.size());
-        fill(outputTraningVector.begin(), outputTraningVector.end(), -1.0);
-        outputTraningVector[i] = 1.0;
-        
-        Mat outputMat(outputTraningVector, false);
-        outputTrainingData.push_back(outputMat.reshape(0, 1));
+    Mat inputTrainingData;
+    Mat outputTrainingData;
+    
+    int ci = 0;
+    out << "Clusters:" << '\n';
+    for (auto& cl : pathClusters) { out << ci++ << ": " << cl.first << '\n'; }
+    out << '\n';
+    
+    int i = 0;
+    for (auto& cl : pathClusters) {
+      cout << "Cluster " << cl.first << endl;
+      for (auto& f : cl.second.files) {
+        Mat im;
+        if (!f.get()->isInvalidImage() && loadMLImage(f.get()->name(), im)) {
+          Mat signImageDataInOneRow = im.reshape(0, 1);
+          //cout << "signImageDataInOneRow.type(): " << signImageDataInOneRow.type() << endl;
+          inputTrainingData.push_back(signImageDataInOneRow);
+          
+          vector<float> outputTraningVector(pathClusters.size());
+          fill(outputTraningVector.begin(), outputTraningVector.end(), -1.0);
+          outputTraningVector[i] = 1.0;
+          
+          Mat outputMat(outputTraningVector, false);
+          outputTrainingData.push_back(outputMat.reshape(0, 1));
+        }
       }
+      
+      ++i;
     }
     
-    ++i;
-  }
-  
-  Ptr<TrainData> trainingData = TrainData::create(
-        inputTrainingData,
-        SampleTypes::ROW_SAMPLE,
-        outputTrainingData
-    );
+    // shuffle
+    //auto shuffledInputTrainingData = shuffleRows(inputTrainingData);
+    
+      vector <int> seeds;
+      for (int cont = 0; cont < inputTrainingData.rows; cont++)
+        seeds.push_back(cont);
 
-  Ptr<ANN_MLP> mlp;// = ANN_MLP::create();
-  const char* mlpPath = "./mlpfile";
-  if (exists(mlpPath)) {
-    mlp = ANN_MLP::load(mlpPath);
-    //mlp->load("./mlpfile");
-  } else {
+      randShuffle(seeds);
+
+      Mat shuffledInputTrainingData;
+      Mat shuffledOutputTrainingData;
+      for (int cont = 0; cont < inputTrainingData.rows; cont++) {
+        shuffledInputTrainingData.push_back(inputTrainingData.row(seeds[cont]));
+        shuffledOutputTrainingData.push_back(outputTrainingData.row(seeds[cont]));
+      }
+
+  // shuffle
+    
+    Ptr<TrainData> trainingData = TrainData::create(
+        shuffledInputTrainingData,
+        SampleTypes::ROW_SAMPLE,
+        shuffledOutputTrainingData
+    );
+  
+    // build
     mlp = ANN_MLP::create();
     Mat layersSize = Mat(3, 1, CV_16U);
     layersSize.row(0) = Scalar(inputTrainingData.cols);
-    layersSize.row(1) = Scalar(2*pathClusters.size());
+    layersSize.row(1) = Scalar(20*pathClusters.size());
     layersSize.row(2) = Scalar(outputTrainingData.cols);
     
     mlp->setLayerSizes(layersSize);
-    mlp->setActivationFunction(ANN_MLP::ActivationFunctions::SIGMOID_SYM, 1.0, 1.0);
-    mlp->setTrainMethod(ANN_MLP::TrainingMethods::BACKPROP, 0.01);
+    mlp->setActivationFunction(ANN_MLP::ActivationFunctions::SIGMOID_SYM, 0.0, 0.0);
+    mlp->setTrainMethod(ANN_MLP::TrainingMethods::BACKPROP, 0.1);
     //mlp->setTrainMethod(ANN_MLP::TrainingMethods::RPROP);
 
     TermCriteria termCrit = TermCriteria(
-        TermCriteria::Type::MAX_ITER //| TermCriteria::Type::EPS,
-        ,1000000 //(int) INT_MAX
+        TermCriteria::Type::COUNT
+        ,10000 //(int) INT_MAX
         ,0.01
     );
     mlp->setTermCriteria(termCrit);
     
-    //auto start = std::chrono::system_clock::now();
+    auto start = std::chrono::system_clock::now();
     mlp->train(trainingData,
         0//ANN_MLP::TrainFlags::UPDATE_WEIGHTS
         //, ANN_MLP::TrainFlags::NO_INPUT_SCALE
         //+ ANN_MLP::TrainFlags::NO_OUTPUT_SCALE
     );
-    //auto duration = duration_cast<std::chrono::milliseconds> (std::chrono::system_clock::now() - start);
-    //cout << "Training time: " << duration.count() << "ms" << endl;
+    auto duration = duration_cast<std::chrono::milliseconds> (std::chrono::system_clock::now() - start);
+    cout << "Training time: " << duration.count() << "ms" << endl;
     cout << "Layer sizes " << mlp->getLayerSizes() << endl;
   //  cout << "L0: " << mlp->getWeights(0).size << " " << mlp->getWeights(0) << endl;
   //  cout << "L1: " << mlp->getWeights(1).size << " " << mlp->getWeights(1) << endl;
   //  cout << "L2: " << mlp->getWeights(2).size << " " << mlp->getWeights(2) << endl;
 
-    //mlp->save("./mlpfile");
-  }
+    mlp->save("./mlpfile");
+  //}
 
   for (auto& f : m_list) {
     Mat img;
     Mat result;
-    //mlp->predict(inputTrainingData.row(i), result);
-    cout << "Predict for " << f.get()->name() << endl;
     if (loadMLImage(f.get()->name(), img)) {
+      cout << "Predict for " << f.get()->name() << " is " << endl;
       out << f.get()->name() << '\n';
       mlp->predict(img.reshape(1, 1), result);
       //out << result << endl;
       for (int c=0; c<result.cols; ++c) {
+        cout << result.col(c) << endl;
         out << c << ": " << result.col(c) << '\n';
       }
     }
