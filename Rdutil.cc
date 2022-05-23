@@ -443,22 +443,86 @@ bool loadMLImage(const string& imagePath, Mat& outputImage) {
   int colorCount = image.rows * image.cols;
   Color sharedColor = {0, 0, 0};
   
-  for (int r = 0; r < image.rows; ++r) {
-    for (int c = 0; c < image.cols; ++c) {
-      Vec3b& colorVec = image.at<Vec3b>();
-      float divider = 100.0f/2550.0f;
-      sharedColor.r = colorVec[0] * divider;
-      sharedColor.g = colorVec[1] * divider;
-      sharedColor.b = colorVec[2] * divider;
-      
-      auto colorIterator = colors.find(sharedColor);
-      if (colorIterator == colors.end()) {
-        colors[sharedColor] = 1;
-      } else {
-        colorIterator->second += 1;
-      }
-    }
+  Mat data = image.reshape(1, image.total());
+  data.convertTo(data, CV_32F);
+  
+  // Perform k-Means
+  int k = 5;
+  vector<int> labels;
+  Mat3f centers;
+  kmeans(data, k, labels, cv::TermCriteria(
+        TermCriteria::Type::MAX_ITER //| TermCriteria::Type::EPS,
+        ,100 //(int) INT_MAX
+        ,1.0),
+        1, cv::KMEANS_PP_CENTERS, centers);
+
+  int labelCount[k];
+  memset(labelCount, 0, sizeof(labelCount));
+  for (int i = 0; i < (int)labels.size(); ++i) {
+    labelCount[labels[i]]++;
   }
+  
+  vector<pair<int, Vec3i>> coutToColor;
+  for (int i = 0; i < k; ++i) {
+    auto v = Vec3i(centers.at<uchar>(i, 0), centers.at<uchar>(i, 1), centers.at<uchar>(i, 2));
+    coutToColor.push_back(
+      pair<int, Vec3i>(
+        labelCount[i],
+        v * 100.0f/2550.0f
+      )
+    );
+  }
+  
+//  std::sort(coutToColor.begin(), coutToColor.end(), [](const pair<int, Vec3f>& a, const pair<int, Vec3f>& b) {
+//      return a.first > b.first;
+//    }
+//  );
+  
+    cout << imagePath << endl;
+//  cout << outputImage << endl;
+//  outputImage.create(0, 1, CV_32FC3);
+int level = k;
+  std::for_each(coutToColor.begin(), coutToColor.end(), [&level, &outputImage, &sharedColor, &colors](const pair<int, Vec3i>& a) {
+    cout << a.second << endl;
+    
+    sharedColor.r = a.second[0];
+    sharedColor.g = a.second[1];
+    sharedColor.b = a.second[2];
+
+    colors[sharedColor] = level;
+    level -= 1;
+    
+//    outputImage.push_back(a.second);
+    //outputImage.push_back(a.second[1]);
+    //outputImage.push_back(a.second[2]);
+  });
+  
+//  for(int i = 0; i < 3; ++i) {
+      //std::stringstream back_clr;
+      //back_clr << centers.at<float>(i + p, 2) << "," << centers.at<float>(i + p, 1) << "," << centers.at<float>(i + p, 0);
+      //palette[i]->setStyleSheet(QString::fromStdString("background-color:rgb(" + back_clr.str() + ");"));
+      //qInfo()<< QString::fromStdString(back_clr.str() );
+      //cout << back_clr.str() << endl;
+
+      //outputImage.push_back(centers.at<float>(i + p, 2));
+//  }
+  
+//  for (int r = 0; r < image.rows; ++r) {
+//    for (int c = 0; c < image.cols; ++c) {
+//      Vec3b& colorVec = image.at<Vec3b>();
+//      float divider = 100.0f/2550.0f;
+//      sharedColor.r = colorVec[0] * divider;
+//      sharedColor.g = colorVec[1] * divider;
+//      sharedColor.b = colorVec[2] * divider;
+//
+//      auto colorIterator = colors.find(sharedColor);
+//      if (colorIterator == colors.end()) {
+//        colors[sharedColor] = 1;
+//      } else {
+//        colorIterator->second += 1;
+//      }
+//    }
+//  }
   
   //memset(colors, 0, sizeof(colors));
 //  cout << imagePath << endl;
@@ -470,9 +534,9 @@ bool loadMLImage(const string& imagePath, Mat& outputImage) {
   outputImage.create(0, 1, CV_32F);
   outputImage.reserve(1000);
   
-  for (uchar r = 0; r < 10; ++r) {
-    for (uchar g = 0; g < 10; ++g) {
-      for (uchar b = 0; b < 10; ++b) {
+  for (uchar r = 0; r <= 10; ++r) {
+    for (uchar g = 0; g <= 10; ++g) {
+      for (uchar b = 0; b <= 10; ++b) {
         sharedColor = {r, g, b};
         auto colorIterator = colors.find(sharedColor);
         if (colorIterator != colors.end()) {
@@ -488,15 +552,7 @@ bool loadMLImage(const string& imagePath, Mat& outputImage) {
   
 //  data.convertTo(data, CV_32F);
 
-  // Perform k-Means
-//  int k = 3;
-//  vector<int> labels;
-//  Mat3f centers;
-//  kmeans(data, k, labels, cv::TermCriteria(
-//        TermCriteria::Type::MAX_ITER //| TermCriteria::Type::EPS,
-//        ,100 //(int) INT_MAX
-//        ,1.0),
-//        1, cv::KMEANS_PP_CENTERS, centers);
+
 
   // Make a poster! (Clustering)
 //  for (int i = 0; i < (int)labels.size(); ++i) {
@@ -504,12 +560,6 @@ bool loadMLImage(const string& imagePath, Mat& outputImage) {
 //      data.at<float>(i, 1) = centers.at<float>(labels[i], 1);
 //      data.at<float>(i, 2) = centers.at<float>(labels[i], 2);
 //     // qDebug()<<labels.size();
-//  }
-
-//  int labelCount[k];
-//  memset(labelCount, 0, sizeof(labelCount));
-//  for (int i = 0; i < (int)labels.size(); ++i) {
-//    labelCount[labels[i]]++;
 //  }
 
   // Un-Serialize, un-float
@@ -528,47 +578,13 @@ bool loadMLImage(const string& imagePath, Mat& outputImage) {
 //    cout << endl;
 //  }
 //
-//  vector<pair<int, Vec3f>> coutToColor;
-//  for (int i = 0; i < k; ++i) {
-//    auto v = Vec3f((int)centers.at<float>(i, 0)/10, (int)centers.at<float>(i, 1)/10, (int)centers.at<float>(i, 2)/10);
-//    coutToColor.push_back(
-//      pair<int, Vec3f>(
-//        labelCount[i],
-//        v / 25.0f
-//      )
-//    );
-//  }
-  
-//  std::sort(coutToColor.begin(), coutToColor.end(), [](const pair<int, Vec3f>& a, const pair<int, Vec3f>& b) {
-//      return a.first > b.first;
-//    }
-//  );
 
-  //cout << coutToColor << endl;
 
 //  // Paint!
 //  //QLabel *palette[6] = {ui->b_1, ui->b_2, ui->b_3, ui->b_4, ui->b_5, ui->b_6};
 //  const int p = 0; // Offset
 //  //centers.convertTo(outputImage, CV_32FC3);
-//  outputImage.create(0, 1, CV_32FC3);
-//  std::for_each(coutToColor.begin(), coutToColor.end(), [&outputImage](const pair<int, Vec3f>& a) {
-//    outputImage.push_back(a.second);
-//    //outputImage.push_back(a.second[1]);
-//    //outputImage.push_back(a.second[2]);
-//  });
-  
-//  cout << imagePath << endl;
-//  cout << outputImage << endl;
-  
-//  for(int i = 0; i < 3; ++i) {
-//      //std::stringstream back_clr;
-//      //back_clr << centers.at<float>(i + p, 2) << "," << centers.at<float>(i + p, 1) << "," << centers.at<float>(i + p, 0);
-//      //palette[i]->setStyleSheet(QString::fromStdString("background-color:rgb(" + back_clr.str() + ");"));
-//      //qInfo()<< QString::fromStdString(back_clr.str() );
-//      //cout << back_clr.str() << endl;
-//
-//      //outputImage.push_back(centers.at<float>(i + p, 2));
-//  }
+
   
   ///
 
