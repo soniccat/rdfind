@@ -428,7 +428,7 @@ struct Color {
   uchar r, g, b;
   
   bool operator() (const Color& lhs, const Color& rhs) const {
-       return (lhs.r < rhs.r) || (lhs.r < rhs.r && lhs.g < rhs.g) || (lhs.r < rhs.r && lhs.g < rhs.g && lhs.b < rhs.b);
+       return (lhs.r < rhs.r) || (lhs.r == rhs.r && lhs.g < rhs.g) || (lhs.r == rhs.r && lhs.g == rhs.g && lhs.b < rhs.b);
    }
 };
 
@@ -441,19 +441,20 @@ bool loadMLImage(const string& imagePath, Mat& outputImage) {
   map<Color, int, Color> colors;
   
   int colorCount = image.rows * image.cols;
-  Color sharedColor = {0, 0, 0};
   
   for (int r = 0; r < image.rows; ++r) {
     for (int c = 0; c < image.cols; ++c) {
-      Vec3b& colorVec = image.at<Vec3b>();
+      Vec3b& colorVec = image.at<Vec3b>(r, c);
       float divider = 100.0f/2550.0f;
-      sharedColor.r = colorVec[0] * divider;
-      sharedColor.g = colorVec[1] * divider;
-      sharedColor.b = colorVec[2] * divider;
+      Color color = {
+        static_cast<uchar>(colorVec[0] * divider),
+        static_cast<uchar>(colorVec[1] * divider),
+        static_cast<uchar>(colorVec[2] * divider)
+      };
       
-      auto colorIterator = colors.find(sharedColor);
+      auto colorIterator = colors.find(color);
       if (colorIterator == colors.end()) {
-        colors[sharedColor] = 1;
+        colors[color] = 1;
       } else {
         colorIterator->second += 1;
       }
@@ -473,11 +474,11 @@ bool loadMLImage(const string& imagePath, Mat& outputImage) {
   for (uchar r = 0; r <= 10; ++r) {
     for (uchar g = 0; g <= 10; ++g) {
       for (uchar b = 0; b <= 10; ++b) {
-        sharedColor = {r, g, b};
-        auto colorIterator = colors.find(sharedColor);
+        Color color = {r, g, b};
+        auto colorIterator = colors.find(color);
         if (colorIterator != colors.end()) {
           int count = colorIterator->second;
-          outputImage.push_back((float)count);
+          outputImage.push_back((float)count / (float)colorCount);
         } else {
           outputImage.push_back(0.0f);
         }
