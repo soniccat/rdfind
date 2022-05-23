@@ -470,9 +470,9 @@ bool loadMLImage(const string& imagePath, Mat& outputImage) {
   outputImage.create(0, 1, CV_32F);
   outputImage.reserve(1000);
   
-  for (uchar r = 0; r < 10; ++r) {
-    for (uchar g = 0; g < 10; ++g) {
-      for (uchar b = 0; b < 10; ++b) {
+  for (uchar r = 0; r <= 10; ++r) {
+    for (uchar g = 0; g <= 10; ++g) {
+      for (uchar b = 0; b <= 10; ++b) {
         sharedColor = {r, g, b};
         auto colorIterator = colors.find(sharedColor);
         if (colorIterator != colors.end()) {
